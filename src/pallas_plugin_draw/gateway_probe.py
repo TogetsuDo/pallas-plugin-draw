@@ -10,7 +10,7 @@ from curl_cffi.requests import AsyncSession as CffiAsyncSession
 from curl_cffi.requests import RequestsError as CffiRequestsError
 from nonebot import logger
 
-from src.shared.service_probe import ServiceProbeResult, format_probe_lines, format_probe_text
+from src.shared.service_probe import ServiceProbeResult, format_probe_lines
 
 from .config import Config, ImageApiBackend, ImageGenSettings, get_draw_config
 from .image_api import (
@@ -19,6 +19,7 @@ from .image_api import (
     image_gen_auth_headers_json,
     image_gen_config,
 )
+from .runtime_state import ai_runtime_circuit_is_open, ai_runtime_circuit_status
 
 
 def transport_mode_for_settings(settings: ImageGenSettings) -> str:
@@ -65,11 +66,38 @@ def models_probe_urls(backend: ImageApiBackend) -> list[str]:
 
 
 def format_gateway_status_lines(results: list[ServiceProbeResult]) -> list[str]:
-    return format_probe_lines(results)
+    lines = format_probe_lines(results)
+    runtime_line = ai_runtime_status_line()
+    if not runtime_line:
+        return lines
+    if not lines:
+        return [f"【{IMAGE_PROBE_CATEGORY}】", runtime_line]
+    return [*lines, runtime_line]
 
 
 def format_gateway_status_text(results: list[ServiceProbeResult]) -> str:
-    return format_probe_text(results)
+    return "\n".join(format_gateway_status_lines(results))
+
+
+def ai_runtime_status_line() -> str:
+    cfg = image_gen_config
+    mode = cfg.runtime_mode
+    fallback_text = "开启回退" if cfg.ai_runtime_fallback_to_plugin else "不回退"
+    if mode != "ai_service_runtime":
+        return f"· AI runtime：未启用（当前为插件直连，{fallback_text}）"
+
+    state = ai_runtime_circuit_status()
+    if ai_runtime_circuit_is_open():
+        return (
+            "· AI runtime：熔断中"
+            f"（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
+        )
+    if state.consecutive_failures > 0:
+        return (
+            "· AI runtime：降级观察中"
+            f"（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
+        )
+    return f"· AI runtime：正常（{fallback_text}）"
 
 
 def image_gen_settings_from_draft(draft: dict[str, Any] | None) -> ImageGenSettings:
@@ -85,7 +113,9 @@ def image_gen_settings_from_draft(draft: dict[str, Any] | None) -> ImageGenSetti
         merged[key] = normalize_patch_value(Config.model_fields[key], value)
     from .config import migrate_legacy_gateway_config
 
-    return ImageGenSettings(migrate_legacy_gateway_config(Config.model_validate(merged)))
+    return ImageGenSettings(
+        migrate_legacy_gateway_config(Config.model_validate(merged))
+    )
 
 
 def probe_timeout_sec(settings: ImageGenSettings) -> float:
@@ -116,7 +146,9 @@ async def cffi_probe_get(
     if not impersonate:
         raise ValueError("tls_impersonate 为空")
     async with CffiAsyncSession() as session:
-        r = await session.get(url, headers=headers, impersonate=impersonate, timeout=timeout_sec)
+        r = await session.get(
+            url, headers=headers, impersonate=impersonate, timeout=timeout_sec
+        )
         return r.status_code, (r.text or "")[:400]
 
 
@@ -214,7 +246,9 @@ async def probe_single_backend(
     )
 
 
-async def probe_all_backends(settings: ImageGenSettings | None = None) -> list[ServiceProbeResult]:
+async def probe_all_backends(
+    settings: ImageGenSettings | None = None,
+) -> list[ServiceProbeResult]:
     cfg = settings or image_gen_config
     backends = cfg.api_backends()
     if not backends:

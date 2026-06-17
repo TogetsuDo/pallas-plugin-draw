@@ -31,6 +31,7 @@ from .draw_attempts import (
     run_backend_param_attempts,
 )
 from .draw_usage_store import pallas_draw_usage_today
+from .ai_runtime_client import generate_image_via_ai_service
 from .image_api import (
     CffiRequestsError,
     download_reference_images,
@@ -42,10 +43,17 @@ from .image_api import (
     post_edits_with_transport,
     post_generations_with_transport,
     request_timeout_for_deadline,
+    reply_generated_image_bytes,
 )
 from .image_request_options import ImageGenRequestOptions
 from .replies import DRAW_VAGUE_REPLY
 from .runtime_state import acquire_draw_pending_slot, release_draw_pending_slot
+from .runtime_state import (
+    ai_runtime_circuit_is_open,
+    ai_runtime_circuit_status,
+    record_ai_runtime_failure,
+    record_ai_runtime_success,
+)
 
 PALLAS_DRAW_COOLDOWN_KEY = "pallas_draw_command"
 
@@ -170,7 +178,10 @@ def draw_should_count_usage(group_id: int, user_id: int) -> bool:
 
 async def draw_group_cooldown_ready(group_id: int) -> bool:
     """仅检查群冷却是否已过，不扣减。"""
-    seconds = get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown) or 0
+    seconds = (
+        get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown)
+        or 0
+    )
     if seconds <= 0:
         return True
     gconf = GroupConfig(group_id, cooldown=seconds)
@@ -179,7 +190,10 @@ async def draw_group_cooldown_ready(group_id: int) -> bool:
 
 async def consume_draw_group_cooldown(group_id: int) -> None:
     """真正开始画画时扣减群冷却。"""
-    seconds = get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown) or 0
+    seconds = (
+        get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown)
+        or 0
+    )
     if seconds <= 0:
         return
     gconf = GroupConfig(group_id, cooldown=seconds)
@@ -188,7 +202,10 @@ async def consume_draw_group_cooldown(group_id: int) -> None:
 
 async def refund_draw_group_cooldown(group_id: int) -> None:
     """画画未成功出图时退还群冷却。"""
-    seconds = get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown) or 0
+    seconds = (
+        get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown)
+        or 0
+    )
     if seconds <= 0:
         return
     gconf = GroupConfig(group_id, cooldown=seconds)
@@ -205,7 +222,9 @@ pallas_draw = on_command(
 
 
 @pallas_draw.handle()
-async def pallas_draw_handle(bot: Bot, event: GroupMessageEvent, args: Message = CommandArg()):  # noqa: B008
+async def pallas_draw_handle(
+    bot: Bot, event: GroupMessageEvent, args: Message = CommandArg()
+):  # noqa: B008
     group_id = event.group_id
     user_id = event.user_id
 
@@ -242,10 +261,14 @@ async def pallas_draw_handle(bot: Bot, event: GroupMessageEvent, args: Message =
         count_usage = False
     limit_n = image_gen_config.draw_per_user_limit
     if count_usage and pallas_draw_usage_today(usage_key) >= limit_n:
-        await pallas_draw.finish(message_at_user(user_id, f"你在本群今日的画画次数已达上限（{limit_n}）。"))
+        await pallas_draw.finish(
+            message_at_user(user_id, f"你在本群今日的画画次数已达上限（{limit_n}）。")
+        )
 
     text = args.extract_plain_text().strip()
-    ref_urls = extract_image_urls_from_messages(args, event.reply.message if event.reply else None)
+    ref_urls = extract_image_urls_from_messages(
+        args, event.reply.message if event.reply else None
+    )
 
     # 如果没有图片参考，尝试用 @ 或回复对象的头像作为参考图
     if not ref_urls:
@@ -298,8 +321,13 @@ async def pallas_draw_handle(bot: Bot, event: GroupMessageEvent, args: Message =
             message_at_user(user_id, "牛牛正在给其他小伙伴画画，请稍后再试。"),
         )
 
-    cheer_gate = get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown) or 0
-    if not await try_begin_group_owned_gate("draw", group_id, bot_id, gate_sec=cheer_gate):
+    cheer_gate = (
+        get_command_cooldown_sec("draw.draw", image_gen_config.draw_command_cooldown)
+        or 0
+    )
+    if not await try_begin_group_owned_gate(
+        "draw", group_id, bot_id, gate_sec=cheer_gate
+    ):
         return
     await consume_draw_group_cooldown(group_id)
 
@@ -333,9 +361,15 @@ async def run_pallas_draw_queued(
         async with get_pallas_draw_user_lock(group_id, user_id):
             limit_n = image_gen_config.draw_per_user_limit
             if count_usage and pallas_draw_usage_today(usage_key) >= limit_n:
-                await matcher.send(message_at_user(user_id, f"你在本群今日的画画次数已达上限（{limit_n}）。"))
+                await matcher.send(
+                    message_at_user(
+                        user_id, f"你在本群今日的画画次数已达上限（{limit_n}）。"
+                    )
+                )
                 return
-            image_sent = await pallas_draw_execute(matcher, bot_id, usage_key, count_usage, user_id, text, ref_urls)
+            image_sent = await pallas_draw_execute(
+                matcher, bot_id, usage_key, count_usage, user_id, text, ref_urls
+            )
     except FinishedException:
         raise
     except DrawTotalTimeoutError:
@@ -347,7 +381,9 @@ async def run_pallas_draw_queued(
         except Exception as send_err:
             logger.warning(f"bot [{bot_id}] draw draw timeout reply failed: {send_err}")
     except Exception as e:
-        logger.exception(f"bot [{bot_id}] draw queued draw failed in group [{group_id}]: {e}")
+        logger.exception(
+            f"bot [{bot_id}] draw queued draw failed in group [{group_id}]: {e}"
+        )
         try:
             await matcher.send(message_at_user(user_id, DRAW_VAGUE_REPLY))
         except FinishedException:
@@ -387,11 +423,66 @@ async def pallas_draw_execute(
     last_status: list[int] = [0]
 
     req_timeout = cfg.request_timeout
-    client_timeout = httpx.Timeout(connect=30.0, read=req_timeout, write=req_timeout, pool=req_timeout)
+    client_timeout = httpx.Timeout(
+        connect=30.0, read=req_timeout, write=req_timeout, pool=req_timeout
+    )
     limits = httpx.Limits(max_connections=max(4, cfg.max_concurrency * 2))
 
     try:
-        async with httpx.AsyncClient(timeout=client_timeout, trust_env=True, limits=limits) as http_client:
+        async with httpx.AsyncClient(
+            timeout=client_timeout, trust_env=True, limits=limits
+        ) as http_client:
+            should_try_ai_runtime = cfg.runtime_mode == "ai_service_runtime"
+            if should_try_ai_runtime and ai_runtime_circuit_is_open():
+                circuit = ai_runtime_circuit_status()
+                logger.warning(
+                    f"bot [{bot_id}] draw ai runtime circuit open in group [{group_id}] "
+                    f"failures={circuit.consecutive_failures} "
+                    f"reason={circuit.recent_failure_reason or 'unknown'}",
+                )
+                should_try_ai_runtime = False
+
+            if should_try_ai_runtime:
+                ai_result = await generate_image_via_ai_service(
+                    http_client,
+                    bot_id=bot_id,
+                    group_id=group_id,
+                    user_id=user_id,
+                    prompt=gen_prompt,
+                    ref_urls=ref_urls,
+                    timeout_sec=request_timeout_for_deadline(
+                        deadline.remaining_seconds()
+                    ),
+                )
+                if ai_result.ok and ai_result.image_bytes is not None:
+                    record_ai_runtime_success()
+                    await reply_generated_image_bytes(
+                        matcher,
+                        ai_result.image_bytes,
+                        at_user_id=user_id,
+                        persist_draw=(usage_key[0], usage_key[1]),
+                    )
+                    from .draw_usage_store import bump_pallas_draw_usage
+
+                    bump_pallas_draw_usage(usage_key, count_usage)
+                    return True
+                record_ai_runtime_failure(ai_result.reply_text or "ai_runtime_failed")
+                logger.warning(
+                    f"bot [{bot_id}] draw ai runtime failed in group [{group_id}] "
+                    f"provider={ai_result.provider_id or '-'} "
+                    f"backend={ai_result.backend_id or '-'} "
+                    f"reply={ai_result.reply_text[:120]!r}",
+                )
+                if not cfg.ai_runtime_fallback_to_plugin:
+                    await matcher.finish(
+                        message_at_user(
+                            user_id, ai_result.reply_text or DRAW_VAGUE_REPLY
+                        )
+                    )
+                logger.info(
+                    f"bot [{bot_id}] draw fallback to plugin runtime in group [{group_id}]"
+                )
+
             if ref_urls and cfg.use_edits_for_reference_images:
                 ref_dl_timeout = min(
                     cfg.ref_download_timeout,
@@ -409,17 +500,23 @@ async def pallas_draw_execute(
                             f"requested {len(ref_urls)} refs, got {len(blobs)} blobs",
                         )
                     edit_prompt = text.strip() or default_prompt
-                    edit_backends = image_backends_with_endpoint(backends, image_edits_endpoint)
+                    edit_backends = image_backends_with_endpoint(
+                        backends, image_edits_endpoint
+                    )
                     edits_abort = [False]
 
-                    async def post_edits(backend: ImageApiBackend, req_opts: ImageGenRequestOptions) -> tuple[int, str]:
+                    async def post_edits(
+                        backend: ImageApiBackend, req_opts: ImageGenRequestOptions
+                    ) -> tuple[int, str]:
                         return await post_edits_with_transport(
                             http_client,
                             blobs,
                             edit_prompt,
                             backend,
                             options=req_opts,
-                            req_timeout_cap=request_timeout_for_deadline(deadline.remaining_seconds()),
+                            req_timeout_cap=request_timeout_for_deadline(
+                                deadline.remaining_seconds()
+                            ),
                         )
 
                     if await run_backend_param_attempts(
@@ -453,7 +550,9 @@ async def pallas_draw_execute(
             payload_model = backends[0].model if backends else cfg.model
             gen_backends = image_backends_with_endpoint(backends, image_gen_endpoint)
 
-            async def post_generations(backend: ImageApiBackend, req_opts: ImageGenRequestOptions) -> tuple[int, str]:
+            async def post_generations(
+                backend: ImageApiBackend, req_opts: ImageGenRequestOptions
+            ) -> tuple[int, str]:
                 gen_ep = image_gen_endpoint(backend)
                 headers = image_gen_auth_headers_json(backend)
                 payload = generations_payload(
@@ -468,7 +567,9 @@ async def pallas_draw_execute(
                     gen_ep,
                     headers,
                     payload,
-                    req_timeout_cap=request_timeout_for_deadline(deadline.remaining_seconds()),
+                    req_timeout_cap=request_timeout_for_deadline(
+                        deadline.remaining_seconds()
+                    ),
                 )
 
             if await run_backend_param_attempts(
@@ -499,21 +600,29 @@ async def pallas_draw_execute(
     except DrawTotalTimeoutError:
         raise
     except httpx.TimeoutException:
-        logger.error(f"bot [{bot_id}] draw api timeout in group [{group_id}] after {req_timeout}s")
+        logger.error(
+            f"bot [{bot_id}] draw api timeout in group [{group_id}] after {req_timeout}s"
+        )
         await matcher.finish(DRAW_VAGUE_REPLY)
     except httpx.ConnectError as e:
-        logger.error(f"bot [{bot_id}] draw api connect error in group [{group_id}]: {e}")
+        logger.error(
+            f"bot [{bot_id}] draw api connect error in group [{group_id}]: {e}"
+        )
         await matcher.finish(DRAW_VAGUE_REPLY)
     except CffiRequestsError as e:
         logger.error(f"bot [{bot_id}] draw curl_cffi error in group [{group_id}]: {e}")
         await matcher.finish(DRAW_VAGUE_REPLY)
     except RuntimeError as e:
-        logger.error(f"bot [{bot_id}] draw transport runtime error in group [{group_id}]: {e}")
+        logger.error(
+            f"bot [{bot_id}] draw transport runtime error in group [{group_id}]: {e}"
+        )
         await matcher.finish(DRAW_VAGUE_REPLY)
     except httpx.HTTPError as e:
         logger.error(f"bot [{bot_id}] draw httpx error in group [{group_id}]: {e}")
         await matcher.finish(DRAW_VAGUE_REPLY)
     except Exception as e:
-        logger.exception(f"bot [{bot_id}] draw api exception in group [{group_id}]: {e}")
+        logger.exception(
+            f"bot [{bot_id}] draw api exception in group [{group_id}]: {e}"
+        )
         await matcher.finish(DRAW_VAGUE_REPLY)
     return False

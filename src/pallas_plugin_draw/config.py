@@ -29,7 +29,9 @@ class ImageBackendEntry(BaseModel):
     )
     api_key: str = Field(
         default="",
-        description=field_help("访问该备用服务用的密钥", "按服务商要求填写；无密钥可留空"),
+        description=field_help(
+            "访问该备用服务用的密钥", "按服务商要求填写；无密钥可留空"
+        ),
     )
     model: str = Field(
         default="",
@@ -98,7 +100,9 @@ class Config(BaseModel, extra="ignore"):
         default="",
         description="像素尺寸规格（如 1024x1024）；与 aspect_ratio 二选一，皆空则由接口默认。",
     )
-    pallas_image_quality: str = Field(default="auto", description="生成质量档位，取值依上游 API 文档。")
+    pallas_image_quality: str = Field(
+        default="auto", description="生成质量档位，取值依上游 API 文档。"
+    )
     pallas_image_response_format: str = Field(
         default="b64_json",
         description=(
@@ -195,15 +199,42 @@ class Config(BaseModel, extra="ignore"):
         le=64,
         description="进程内同时进行中的画画任务上限（含已回复「欢呼吧」尚未结束的）；0 不限制。",
     )
+    pallas_image_runtime_mode: str = Field(
+        default="plugin_runtime",
+        description=field_help(
+            "画图运行模式",
+            "plugin_runtime 由插件直接访问图像网关；ai_service_runtime 由 AI 服务统一执行 image runtime",
+        ),
+    )
+    pallas_image_ai_runtime_fallback_to_plugin: bool = Field(
+        default=True,
+        description="AI 服务画图失败时，是否自动回退到插件直连图像网关。",
+    )
+    pallas_image_ai_runtime_open_circuit_failures: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="AI 服务连续失败达到该次数后，短期开启熔断。",
+    )
+    pallas_image_ai_runtime_circuit_cooldown_sec: int = Field(
+        default=120,
+        ge=5,
+        le=3600,
+        description="AI 服务熔断开启后的冷却时间（秒）；冷却期内优先走回退链路。",
+    )
 
     @classmethod
     def from_env(cls) -> Self:
-        return migrate_legacy_gateway_config(config_from_env(cls, parse_env_value=parse_draw_env_value))
+        return migrate_legacy_gateway_config(
+            config_from_env(cls, parse_env_value=parse_draw_env_value)
+        )
 
 
 def migrate_legacy_gateway_config(c: Config) -> Config:
     """旧部署仅写 api_backends、主站 base_url/api_key 为空时，将首条有效备选提升为主网关。"""
-    if (c.pallas_image_base_url or "").strip() and (c.pallas_image_api_key or "").strip():
+    if (c.pallas_image_base_url or "").strip() and (
+        c.pallas_image_api_key or ""
+    ).strip():
         return c
     backends = list(c.pallas_image_api_backends)
     if not backends:
@@ -237,7 +268,11 @@ def parse_draw_env_value(name: str, raw: str, ann: Any) -> Any:
             return [] if "list" in ann_text else {}
         parsed = json.loads(text)
         if name == "pallas_image_api_backends" and isinstance(parsed, list):
-            return [ImageBackendEntry.model_validate(x) for x in parsed if isinstance(x, dict)]
+            return [
+                ImageBackendEntry.model_validate(x)
+                for x in parsed
+                if isinstance(x, dict)
+            ]
         return parsed
     if "float" in ann_text and "list" not in ann_text:
         return float(text)
@@ -452,6 +487,23 @@ class ImageGenSettings:
     @property
     def draw_max_pending(self) -> int:
         return self._c.pallas_image_draw_max_pending
+
+    @property
+    def runtime_mode(self) -> str:
+        raw = (self._c.pallas_image_runtime_mode or "plugin_runtime").strip().lower()
+        return "ai_service_runtime" if raw == "ai_service_runtime" else "plugin_runtime"
+
+    @property
+    def ai_runtime_fallback_to_plugin(self) -> bool:
+        return self._c.pallas_image_ai_runtime_fallback_to_plugin
+
+    @property
+    def ai_runtime_open_circuit_failures(self) -> int:
+        return self._c.pallas_image_ai_runtime_open_circuit_failures
+
+    @property
+    def ai_runtime_circuit_cooldown_sec(self) -> int:
+        return self._c.pallas_image_ai_runtime_circuit_cooldown_sec
 
 
 def on_draw_config_reload(cfg: Config) -> None:

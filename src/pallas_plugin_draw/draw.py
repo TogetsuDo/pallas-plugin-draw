@@ -453,7 +453,10 @@ async def pallas_draw_execute(
                     timeout_sec=request_timeout_for_deadline(
                         deadline.remaining_seconds()
                     ),
+                    count_usage=count_usage,
                 )
+                if ai_result.pending_callback:
+                    return True
                 if ai_result.ok and ai_result.image_bytes is not None:
                     record_ai_runtime_success()
                     await reply_generated_image_bytes(

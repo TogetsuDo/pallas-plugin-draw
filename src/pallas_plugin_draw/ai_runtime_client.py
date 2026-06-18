@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from src.features.llm.config import get_llm_config, llm_server_base_url
+from pallas.api.platform import get_llm_config, llm_server_base_url
 
 from .replies import DRAW_VAGUE_REPLY
 
@@ -201,7 +201,7 @@ async def generate_image_via_ai_service(
     timeout_sec: float,
     count_usage: bool = False,
 ) -> AiImageResult:
-    from src.foundation.config import TaskManager
+    from pallas.api.config import TaskManager
 
     request_id = f"draw-{bot_id}-{group_id}-{user_id}-{uuid.uuid4().hex[:8]}"
     use_task_mode = should_use_task_mode(ref_urls=ref_urls, timeout_sec=timeout_sec)

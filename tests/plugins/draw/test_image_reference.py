@@ -5,7 +5,7 @@ import base64
 import httpx
 import pytest
 
-from src.platform.media.reference_resolve import decode_inline_image_reference
+from pallas.api.media import decode_inline_image_reference
 from pallas_plugin_draw.image_api import resolve_reference_urls_for_upstream
 
 PNG_BYTES = base64.b64decode(
@@ -20,7 +20,7 @@ async def test_resolve_reference_urls_for_upstream_delegates_to_platform(
     async def fake_resolve(client, ref_urls, *, options, download_timeout=None):
         assert ref_urls == ["https://gchat.qpic.cn/download/abc"]
         assert download_timeout == 30.0
-        from src.platform.media.reference_resolve import ReferenceResolveResult, bytes_to_data_reference_url
+        from pallas.api.media import ReferenceResolveResult, bytes_to_data_reference_url
 
         return ReferenceResolveResult(inline_urls=[bytes_to_data_reference_url(PNG_BYTES)])
 

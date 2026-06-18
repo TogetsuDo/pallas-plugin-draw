@@ -1,13 +1,13 @@
 from nonebot.plugin import PluginMetadata
 
-from src.features.cmd_perm.metadata_defaults import (
+from pallas.api.metadata import (
     PLUGIN_EXTRA_VERSION,
     PLUGIN_HOMEPAGE,
     PLUGIN_MENU_TEMPLATE,
 )
-from src.features.cmd_perm.metadata_text import SCENE_GROUP, join_usage, usage_line
-from src.features.llm.tools.declare import llm_command_tool_row
-from src.features.plugin_storage.declare import plugin_storage_list, plugin_storage_row
+from pallas.api.metadata import SCENE_GROUP, join_usage, usage_line
+from pallas.api.platform import llm_command_tool_row
+from pallas.api.storage import plugin_storage_list, plugin_storage_row
 
 __plugin_meta__ = PluginMetadata(
     name="牛牛画画",

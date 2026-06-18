@@ -140,7 +140,7 @@ async def test_draw_handle_skips_entire_command_when_message_scrub_blocked(monke
 
 @pytest.mark.asyncio
 async def test_draw_handle_same_bot_duplicate_event_only_cheers_once(monkeypatch):
-    from src.platform.shard.registry import config as shard_cfg
+    from pallas.core.platform.shard.registry import config as shard_cfg
     from pallas_plugin_draw import draw as mod
     from pallas_plugin_draw.config import ImageApiBackend
 

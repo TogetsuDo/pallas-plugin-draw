@@ -6,8 +6,8 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.console.webui import config_from_env, install_hot_reload_config
-from src.console.webui.field_help import field_help
+from pallas.api.config import config_from_env, install_hot_reload_config
+from pallas.api.config import field_help
 
 
 class ImageBackendEntry(BaseModel):

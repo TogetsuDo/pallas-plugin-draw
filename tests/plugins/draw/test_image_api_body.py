@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pallas_plugin_draw.replies import DRAW_VAGUE_REPLY
-from src.shared.utils.http_msg import upstream_error_visible_to_user
+from pallas.api.messages import upstream_error_visible_to_user
 from pallas_plugin_draw.config import ImageApiBackend
 from pallas_plugin_draw.image_api import (
     extract_image_from_generation_payload,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.platform.plugin_runtime.resolve import import_plugin_submodule
+from pallas.api.platform import import_plugin_submodule
 
 
 def on_draw_media_task_failed(task: dict[str, Any]) -> None:

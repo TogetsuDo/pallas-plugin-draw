@@ -1,4 +1,4 @@
-from src.shared.service_probe import ServiceProbeResult
+from pallas.api.probe import ServiceProbeResult
 from pallas_plugin_draw.config import Config, ImageApiBackend, ImageGenSettings
 from pallas_plugin_draw.gateway_probe import (
     IMAGE_PROBE_CATEGORY,

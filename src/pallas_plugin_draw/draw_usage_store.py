@@ -11,7 +11,7 @@ from nonebot import logger
 if TYPE_CHECKING:
     from pathlib import Path
 
-from src.foundation.paths import plugin_data_dir
+from pallas.api.paths import plugin_data_dir
 
 _USAGE_FILE = "pallas_draw_daily_usage.json"
 _STORAGE_KEY = "daily_usage"
@@ -106,7 +106,7 @@ def _migrate_legacy_payload() -> dict[tuple[int, int], tuple[date, int]]:
     if raw is None and not path.is_file():
         return {}
     payload = raw if isinstance(raw, dict) else {"version": _VERSION, "entries": {}}
-    from src.features.plugin_storage.deploy_store import DeployPluginStorage
+    from pallas.api.storage import DeployPluginStorage
 
     DeployPluginStorage("draw").set(_STORAGE_KEY, payload)
     if path.is_file():
@@ -118,7 +118,7 @@ def _migrate_legacy_payload() -> dict[tuple[int, int], tuple[date, int]]:
 
 def _load_from_storage() -> dict[tuple[int, int], tuple[date, int]]:
     try:
-        from src.features.plugin_storage.deploy_store import DeployPluginStorage
+        from pallas.api.storage import DeployPluginStorage
 
         store = DeployPluginStorage("draw")
         raw = store.get(_STORAGE_KEY)
@@ -148,7 +148,7 @@ def _prune_stale_memory() -> None:
 def _persist() -> None:
     _prune_stale_memory()
     payload = {"version": _VERSION, "entries": _entries_from_usage_map()}
-    from src.features.plugin_storage.deploy_store import DeployPluginStorage
+    from pallas.api.storage import DeployPluginStorage
 
     DeployPluginStorage("draw").set(_STORAGE_KEY, payload)
 

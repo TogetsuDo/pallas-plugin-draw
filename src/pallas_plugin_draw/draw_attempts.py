@@ -9,7 +9,7 @@ import httpx
 from nonebot import logger
 from nonebot.exception import FinishedException
 
-from src.shared.utils.http_msg import (
+from pallas.api.messages import (
     http_body_rejects_response_format,
     http_status_should_skip_backend,
     http_status_should_try_next_param,

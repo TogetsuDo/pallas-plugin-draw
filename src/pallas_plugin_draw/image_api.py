@@ -13,15 +13,15 @@ from curl_cffi.requests import RequestsError as CffiRequestsError
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Message, MessageSegment
 
-from src.platform.media.draw_reference import draw_reference_download_options
-from src.platform.media.reference_resolve import (
+from pallas.api.media import draw_reference_download_options
+from pallas.api.media import (
     ReferenceResolveResult,
     bytes_from_reference_token,
     decode_inline_image_reference,
     resolve_reference_inline_urls,
     strip_data_url_base64,
 )
-from src.shared.utils.http_msg import user_failure_reply
+from pallas.api.messages import user_failure_reply
 
 from .config import ImageApiBackend, image_gen_config
 from .image_request_options import ImageGenRequestOptions

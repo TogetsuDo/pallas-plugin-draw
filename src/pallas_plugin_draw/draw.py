@@ -12,12 +12,12 @@ from nonebot.exception import FinishedException
 from nonebot.params import CommandArg
 from nonebot.permission import SUPERUSER
 
-from src.features.cmd_perm import group_message_permission_for_command
-from src.features.command_limits import get_command_cooldown_sec
-from src.features.message_scrub import is_message_scrub_blocked_async
-from src.features.message_scrub.log_preview import scrub_intercept_log_preview
-from src.foundation.config import GroupConfig
-from src.platform.multi_bot.group import (
+from pallas.api.perm import group_message_permission_for_command
+from pallas.api.limits import get_command_cooldown_sec
+from pallas.api.safety import is_message_scrub_blocked_async
+from pallas.api.safety import scrub_intercept_log_preview
+from pallas.api.config import GroupConfig
+from pallas.api.platform import (
     try_begin_group_owned_gate,
     try_claim_group_message_once,
 )

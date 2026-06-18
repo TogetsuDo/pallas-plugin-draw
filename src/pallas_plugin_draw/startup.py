@@ -1,6 +1,6 @@
-from src.platform.ai_callback.media_task_hooks import register_media_task_hooks
-from src.platform.ai_callback.task_types import DRAW_IMAGE_TASK_TYPE
-from src.features.plugin_storage.startup import register_plugin_storage_startup_hook
+from pallas.api.platform import register_media_task_hooks
+from pallas.api.platform import DRAW_IMAGE_TASK_TYPE
+from pallas.api.storage import register_plugin_storage_startup_hook
 
 from .media_callback import on_draw_media_task_failed, on_draw_media_task_success
 

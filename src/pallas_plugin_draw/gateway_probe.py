@@ -10,7 +10,7 @@ from curl_cffi.requests import AsyncSession as CffiAsyncSession
 from curl_cffi.requests import RequestsError as CffiRequestsError
 from nonebot import logger
 
-from src.shared.service_probe import ServiceProbeResult, format_probe_lines
+from pallas.api.probe import ServiceProbeResult, format_probe_lines
 
 from .config import Config, ImageApiBackend, ImageGenSettings, get_draw_config
 from .image_api import (
@@ -97,7 +97,7 @@ def ai_runtime_status_line() -> str:
 def image_gen_settings_from_draft(draft: dict[str, Any] | None) -> ImageGenSettings:
     if not draft:
         return image_gen_config
-    from src.console.webui.plugin_api import normalize_patch_value
+    from pallas.api.config import normalize_patch_value
 
     current = get_draw_config().model_dump(mode="python")
     merged = dict(current)

@@ -1,12 +1,18 @@
-<div align="center">
-  <img alt="Pallas-Bot" src="https://user-images.githubusercontent.com/18511905/195892994-c1a231ec-147a-4f98-ba75-137d89578247.png" width="360" height="270" />
-</div>
+<p align="center">
+  <img src="./assets/brand-avatar.png" width="220" height="220" alt="牛牛画画">
+</p>
 
-# pallas-plugin-draw
+<h1 align="center">牛牛画画 pallas-plugin-draw</h1>
 
-Pallas-Bot 4.0 官方扩展：**牛牛画画**（AI 生图网关）。
+<p align="center">提供群内 AI 生图与参考图改图能力。</p>
 
-## 安装
+<p align="center">
+  <img alt="官方插件" src="https://img.shields.io/badge/%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6-FE7D37">
+  <img alt="控制台插件商店" src="https://img.shields.io/badge/%E6%8E%A7%E5%88%B6%E5%8F%B0-%E6%8F%92%E4%BB%B6%E5%95%86%E5%BA%97-4EA94B">
+  <img alt="安装命令" src="https://img.shields.io/badge/uv%20run%20pallas%20ext%20install%20pallas--plugin--draw-586069">
+</p>
+
+## 安装方式
 
 需已安装 [Pallas-Bot](https://github.com/PallasBot/Pallas-Bot) **≥ 4.0**。
 
@@ -22,13 +28,13 @@ uv run pallas ext install pallas-plugin-draw
 uv pip install pallas-plugin-draw
 ```
 
-## 功能说明
+## 怎么使用
 
 群内 AI 生图；可纯文字或带参考图（附图/回复图）。依赖画画网关，次数受限。
 
 ### 用户命令
 
-| 口令 | 场景 | 说明 |
+| 口令 / 触发 | 场景 | 说明 |
 | --- | --- | --- |
 | 牛牛画画 … | 群内 | 按描述生图或改图 |
 
@@ -38,26 +44,38 @@ uv pip install pallas-plugin-draw
 | --- | --- |
 | `draw.draw` | everyone |
 
-### 配置
+> 详细用法、限制条件和可用范围以帮助为主。
+
+## 配置项
 
 WebUI **插件 → 牛牛画画** 或 **服务网关 / 连通性**；字段前缀为 `pallas_image_*`（历史命名，见文档站）。
 
 完整键：本仓库 [`config.py`](src/pallas_plugin_draw/config.py)
 
-### 排障
+## 排障
 
 | 现象 | 处理 |
 | --- | --- |
 | 失败提示 | 看返回文案；用 `牛牛连通` 测网关 |
 | 次数用尽 | 等待重置或调配额 |
 
-## 文档
+## 实现
+
+源码位置：[`src/pallas_plugin_draw/`](src/pallas_plugin_draw/)
+
+关键文件：
+
+- [`src/pallas_plugin_draw/__init__.py`](src/pallas_plugin_draw/__init__.py)：注册画画命令与插件元数据。
+- [`src/pallas_plugin_draw/config.py`](src/pallas_plugin_draw/config.py)：定义画画网关与限制配置。
+
+实现要点：
+
+- 支持纯文本生成与带参考图的改图路径。
+- 结果依赖外部画图网关，失败时以返回文案和连通性为主要事实源。
+
+## 相关链接
 
 | 说明 | 链接 |
 | --- | --- |
 | 牛牛画画 · 用户文档 | [文档站 · draw](https://PallasBot.github.io/Pallas-Bot-Docs/plugins/draw) |
 | 插件开发入门 | [develop/plugin/getting-started](https://PallasBot.github.io/Pallas-Bot-Docs/develop/plugin/getting-started) |
-
-## 源码
-
-[`src/pallas_plugin_draw/`](src/pallas_plugin_draw/)

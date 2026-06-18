@@ -1,6 +1,6 @@
 [project]
 name = "pallas-plugin-draw"
-version = "4.0.1"
+version = "4.0.2"
 description = "Pallas-Bot 官方扩展：图像生成网关与画画命令。"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -13,7 +13,15 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff>=0.11.13",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.1",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["../Pallas-Bot"]
 
 [build-system]
 requires = ["hatchling"]

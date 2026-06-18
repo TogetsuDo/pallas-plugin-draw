@@ -10,9 +10,17 @@
 ## 本地开发
 
 ```bash
+# 扩展仓内（需 sibling Pallas-Bot）
 uv sync --group dev
+uv pip install -e ../Pallas-Bot
+uv pip install -e .
 uv run ruff check src/
-uv run ruff format --check src/
+uv run pytest tests/ -q
+
+# 或在本体仓联调（推荐）
+cd ../Pallas-Bot
+uv pip install -e ../Pallas-Plugin-Draw
+uv run pytest ../Pallas-Plugin-Draw/tests/ -q
 ```
 
 与本体联调：在本体仓库执行 `uv pip install -e ../Pallas-Plugin-Draw`，或在扩展仓根目录 `uv.toml` 中配置 `pallas-bot` 的 path 源。

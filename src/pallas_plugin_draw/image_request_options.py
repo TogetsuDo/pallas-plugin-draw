@@ -47,7 +47,13 @@ class ImageGenRequestOptions:
 
 def response_format_attempts(configured: str | None = None) -> list[str]:
     primary = (
-        (configured if configured is not None else (image_gen_config.response_format or "b64_json")).strip().lower()
+        (
+            configured
+            if configured is not None
+            else (image_gen_config.response_format or "b64_json")
+        )
+        .strip()
+        .lower()
     )
     if primary == "b64_json":
         return ["b64_json", "url"]
@@ -84,11 +90,19 @@ def dimension_attempts(size: str, aspect_ratio: str) -> list[tuple[str, str]]:
     return out
 
 
-def dedupe_request_options(options: list[ImageGenRequestOptions]) -> list[ImageGenRequestOptions]:
+def dedupe_request_options(
+    options: list[ImageGenRequestOptions],
+) -> list[ImageGenRequestOptions]:
     seen: set[tuple[str, str, str, str, bool]] = set()
     out: list[ImageGenRequestOptions] = []
     for o in options:
-        key = (o.size, o.aspect_ratio, o.quality, o.response_format, o.include_ref_images)
+        key = (
+            o.size,
+            o.aspect_ratio,
+            o.quality,
+            o.response_format,
+            o.include_ref_images,
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -143,7 +157,13 @@ def image_gen_slow_attempts(
     seq: list[ImageGenRequestOptions] = []
 
     def add(opt: ImageGenRequestOptions) -> None:
-        key = (opt.size, opt.aspect_ratio, opt.quality, opt.response_format, opt.include_ref_images)
+        key = (
+            opt.size,
+            opt.aspect_ratio,
+            opt.quality,
+            opt.response_format,
+            opt.include_ref_images,
+        )
         if key not in fast_keys:
             seq.append(opt)
 
@@ -182,9 +202,18 @@ def capped_param_attempts(
         with_ref_urls=with_ref_urls,
         omit_response_format=omit_response_format,
     )
-    seen = {(o.size, o.aspect_ratio, o.quality, o.response_format, o.include_ref_images) for o in out}
+    seen = {
+        (o.size, o.aspect_ratio, o.quality, o.response_format, o.include_ref_images)
+        for o in out
+    }
     for o in slow:
-        key = (o.size, o.aspect_ratio, o.quality, o.response_format, o.include_ref_images)
+        key = (
+            o.size,
+            o.aspect_ratio,
+            o.quality,
+            o.response_format,
+            o.include_ref_images,
+        )
         if key in seen:
             continue
         seen.add(key)

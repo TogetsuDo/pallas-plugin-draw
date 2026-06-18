@@ -13,6 +13,14 @@ from curl_cffi.requests import RequestsError as CffiRequestsError
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Message, MessageSegment
 
+from src.platform.media.draw_reference import draw_reference_download_options
+from src.platform.media.reference_resolve import (
+    ReferenceResolveResult,
+    bytes_from_reference_token,
+    decode_inline_image_reference,
+    resolve_reference_inline_urls,
+    strip_data_url_base64,
+)
 from src.shared.utils.http_msg import user_failure_reply
 
 from .config import ImageApiBackend, image_gen_config
@@ -495,27 +503,6 @@ def is_valid_generated_image(data: bytes) -> bool:
     return False
 
 
-def strip_data_url_base64(value: str) -> str:
-    """部分网关把 b64_json 填成 data:image/png;base64,...，需去掉前缀再解码。"""
-    t = value.strip()
-    if t.startswith("data:") and ";base64," in t:
-        return t.split(";base64,", 1)[1]
-    return t
-
-
-def decode_inline_image_reference(value: str) -> bytes | None:
-    """解析 data:image/...;base64,... 或裸 base64 字段。"""
-    t = (value or "").strip()
-    if not t:
-        return None
-    if t.startswith("data:") and ";base64," in t:
-        try:
-            return base64.b64decode(strip_data_url_base64(t))
-        except Exception:
-            return None
-    return None
-
-
 def image_bytes_from_payload_field(
     url: str | None, b64: str | None
 ) -> tuple[str | None, bytes | None]:
@@ -560,33 +547,32 @@ def extract_image_from_generation_payload(
     )
 
 
+async def resolve_reference_urls_for_upstream(
+    client: httpx.AsyncClient,
+    ref_urls: list[str],
+    *,
+    download_timeout: float | None = None,
+) -> ReferenceResolveResult:
+    return await resolve_reference_inline_urls(
+        client,
+        ref_urls,
+        options=draw_reference_download_options(image_gen_config),
+        download_timeout=download_timeout,
+    )
+
+
 async def bytes_from_image_reference(
     client: httpx.AsyncClient,
     url: str,
     *,
     download_timeout: float | None = None,
 ) -> bytes | None:
-    u = (url or "").strip()
-    if u.startswith("base64://"):
-        try:
-            return base64.b64decode(u[9:])
-        except Exception:
-            return None
-    if not u.startswith(("http://", "https://")):
-        return None
-    try:
-        r = await client.get(u, timeout=download_timeout)
-        if r.status_code == 200:
-            return r.content
-        logger.debug(
-            "download ref image non-200: url={}, status={}",
-            u[:160],
-            r.status_code,
-        )
-        return None
-    except Exception as exc:
-        logger.debug(f"draw download ref image error url={u[:160]!r} exc={exc!r}")
-        return None
+    return await bytes_from_reference_token(
+        client,
+        url,
+        options=draw_reference_download_options(image_gen_config),
+        download_timeout=download_timeout,
+    )
 
 
 async def download_reference_images(

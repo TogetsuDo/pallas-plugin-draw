@@ -200,15 +200,15 @@ class Config(BaseModel, extra="ignore"):
         description="进程内同时进行中的画画任务上限（含已回复「欢呼吧」尚未结束的）；0 不限制。",
     )
     pallas_image_runtime_mode: str = Field(
-        default="plugin_runtime",
+        default="ai_service_runtime",
         description=field_help(
             "画图运行模式",
-            "plugin_runtime 由插件直接访问图像网关；ai_service_runtime 由 AI 服务统一执行 image runtime",
+            "ai_service_runtime 由 AI 服务统一执行（推荐）；plugin_runtime 为插件直连网关兜底",
         ),
     )
     pallas_image_ai_runtime_fallback_to_plugin: bool = Field(
-        default=True,
-        description="AI 服务画图失败时，是否自动回退到插件直连图像网关。",
+        default=False,
+        description="AI 服务画图失败时，是否回退到插件直连图像网关（兼容期；默认关闭）。",
     )
     pallas_image_ai_runtime_open_circuit_failures: int = Field(
         default=3,
@@ -490,7 +490,9 @@ class ImageGenSettings:
 
     @property
     def runtime_mode(self) -> str:
-        raw = (self._c.pallas_image_runtime_mode or "plugin_runtime").strip().lower()
+        raw = (
+            (self._c.pallas_image_runtime_mode or "ai_service_runtime").strip().lower()
+        )
         return "ai_service_runtime" if raw == "ai_service_runtime" else "plugin_runtime"
 
     @property

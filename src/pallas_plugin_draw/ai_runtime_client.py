@@ -47,6 +47,18 @@ def should_use_task_mode(*, ref_urls: list[str], timeout_sec: float) -> bool:
     return timeout_sec >= 90.0
 
 
+def reference_urls_for_payload(ref_urls: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for url in ref_urls:
+        token = (url or "").strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
 def build_image_request_payload(
     *,
     request_id: str,
@@ -83,7 +95,7 @@ def build_image_request_payload(
         },
         "payload": {
             "prompt": prompt,
-            "reference_urls": ref_urls,
+            "reference_urls": reference_urls_for_payload(ref_urls),
         },
     }
 
@@ -99,7 +111,12 @@ def image_result_from_body(body: dict) -> AiImageResult:
         return AiImageResult(
             ok=False,
             reply_text=str(
-                (((body.get("error") or {}) if isinstance(body, dict) else {}).get("message")) or DRAW_VAGUE_REPLY
+                (
+                    ((body.get("error") or {}) if isinstance(body, dict) else {}).get(
+                        "message"
+                    )
+                )
+                or DRAW_VAGUE_REPLY
             ),
             provider_id=str(body.get("provider_id") or "") or None,
             backend_id=str(body.get("backend_id") or "") or None,
@@ -134,11 +151,15 @@ async def poll_image_task_result(
         try:
             response = await client.get(
                 media_task_status_endpoint(task_id),
-                timeout=httpx.Timeout(min(15.0, timeout_sec), connect=min(10.0, timeout_sec)),
+                timeout=httpx.Timeout(
+                    min(15.0, timeout_sec), connect=min(10.0, timeout_sec)
+                ),
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            return AiImageResult(ok=False, reply_text=str(exc)[:200] or DRAW_VAGUE_REPLY)
+            return AiImageResult(
+                ok=False, reply_text=str(exc)[:200] or DRAW_VAGUE_REPLY
+            )
 
         body = response.json()
         state = str(body.get("state") or "").strip().lower()
@@ -251,5 +272,7 @@ async def generate_image_via_ai_service(
         return result
     if result.reply_text.startswith("__task__:"):
         task_id = result.reply_text.removeprefix("__task__:")
-        return await poll_image_task_result(client, task_id=task_id, timeout_sec=timeout_sec)
+        return await poll_image_task_result(
+            client, task_id=task_id, timeout_sec=timeout_sec
+        )
     return result

@@ -88,15 +88,9 @@ def ai_runtime_status_line() -> str:
 
     state = ai_runtime_circuit_status()
     if ai_runtime_circuit_is_open():
-        return (
-            "· AI runtime：熔断中"
-            f"（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
-        )
+        return f"· AI runtime：熔断中（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
     if state.consecutive_failures > 0:
-        return (
-            "· AI runtime：降级观察中"
-            f"（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
-        )
+        return f"· AI runtime：降级观察中（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
     return f"· AI runtime：正常（{fallback_text}）"
 
 

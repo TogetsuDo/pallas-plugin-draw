@@ -80,7 +80,9 @@ def format_transport_error(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc!r}"
 
 
-PostRequestFn = Callable[[ImageApiBackend, ImageGenRequestOptions], Awaitable[tuple[int, str]]]
+PostRequestFn = Callable[
+    [ImageApiBackend, ImageGenRequestOptions], Awaitable[tuple[int, str]]
+]
 
 
 async def run_backend_param_attempts(
@@ -190,7 +192,9 @@ async def run_backend_param_attempts(
                         await matcher.finish(
                             message_at_user(
                                 user_id,
-                                user_failure_reply(body_text, vague_reply=DRAW_VAGUE_REPLY),
+                                user_failure_reply(
+                                    body_text, vague_reply=DRAW_VAGUE_REPLY
+                                ),
                             )
                         )
                         return True
@@ -205,7 +209,11 @@ async def run_backend_param_attempts(
                 break
             if http_status_should_skip_backend(status):
                 skip_backend = True
-                if op == "edits" and http_status_edits_unsupported(status) and edits_abort_holder is not None:
+                if (
+                    op == "edits"
+                    and http_status_edits_unsupported(status)
+                    and edits_abort_holder is not None
+                ):
                     edits_abort_holder[0] = True
                 if still_retrying:
                     logger.info(
@@ -251,4 +259,8 @@ async def run_backend_param_attempts(
 
 
 async def finish_draw_failure(matcher, user_id: int, last_body: str) -> None:
-    await matcher.finish(message_at_user(user_id, user_failure_reply(last_body, vague_reply=DRAW_VAGUE_REPLY)))
+    await matcher.finish(
+        message_at_user(
+            user_id, user_failure_reply(last_body, vague_reply=DRAW_VAGUE_REPLY)
+        )
+    )

@@ -22,38 +22,14 @@ from src.platform.multi_bot.group import (
     try_claim_group_message_once,
 )
 
-from .config import ImageApiBackend, active_image_gen_settings, image_gen_config
-from .draw_attempts import (
-    DrawDeadline,
-    DrawTotalTimeoutError,
-    finish_draw_failure,
-    http_status_edits_unsupported,
-    run_backend_param_attempts,
-)
+from .ai_execute import run_ai_service_draw
+from .config import active_image_gen_settings, image_gen_config
+from .draw_attempts import DrawDeadline, DrawTotalTimeoutError
 from .draw_usage_store import pallas_draw_usage_today
-from .ai_runtime_client import generate_image_via_ai_service
-from .image_api import (
-    CffiRequestsError,
-    download_reference_images,
-    generations_payload,
-    image_edits_endpoint,
-    image_gen_auth_headers_json,
-    image_gen_endpoint,
-    message_at_user,
-    post_edits_with_transport,
-    post_generations_with_transport,
-    request_timeout_for_deadline,
-    reply_generated_image_bytes,
-)
-from .image_request_options import ImageGenRequestOptions
+from .image_api import CffiRequestsError, message_at_user
+from .plugin_gateway import run_plugin_gateway_draw
 from .replies import DRAW_VAGUE_REPLY
 from .runtime_state import acquire_draw_pending_slot, release_draw_pending_slot
-from .runtime_state import (
-    ai_runtime_circuit_is_open,
-    ai_runtime_circuit_status,
-    record_ai_runtime_failure,
-    record_ai_runtime_success,
-)
 
 PALLAS_DRAW_COOLDOWN_KEY = "pallas_draw_command"
 
@@ -135,11 +111,24 @@ def qq_avatar_url(user_id: int) -> str:
     return f"https://q.qlogo.cn/g?b=qq&nk={user_id}&s=0"
 
 
-def image_backends_with_endpoint(
-    backends: list[ImageApiBackend],
-    endpoint_fn,
-) -> list[ImageApiBackend]:
-    return [b for b in backends if endpoint_fn(b)]
+def build_draw_gen_prompt(text: str, ref_urls: list[str]) -> str:
+    cfg = image_gen_config
+    default_prompt = (cfg.default_edit_prompt or "生成图像").strip()
+    if cfg.merge_reference_urls_into_prompt:
+        return " ".join([p for p in [text, *ref_urls] if p])
+    if text.strip():
+        return text.strip()
+    if ref_urls:
+        return default_prompt
+    return default_prompt
+
+
+def should_run_plugin_gateway(cfg) -> bool:
+    if cfg.runtime_mode == "plugin_runtime":
+        return True
+    return (
+        cfg.runtime_mode == "ai_service_runtime" and cfg.ai_runtime_fallback_to_plugin
+    )
 
 
 _MAX_PALLAS_DRAW_USER_LOCKS = 8192
@@ -235,11 +224,12 @@ async def pallas_draw_handle(
     if not await draw_group_cooldown_ready(group_id):
         return
 
+    scrub_plain = args.extract_plain_text().strip() or event.get_plaintext()
     if await is_message_scrub_blocked_async(
-        plain_text=event.get_plaintext(),
-        raw_message=event.raw_message,
+        plain_text=scrub_plain,
+        raw_message=scrub_plain,
     ):
-        pv = scrub_intercept_log_preview(event.get_plaintext(), event.raw_message)
+        pv = scrub_intercept_log_preview(scrub_plain, scrub_plain)
         logger.info(
             f"bot [{event.self_id}] draw command skipped (message_scrub) in group [{event.group_id}] "
             f"user [{event.user_id}] msg_id [{event.message_id}] preview [{pv}]"
@@ -247,7 +237,10 @@ async def pallas_draw_handle(
         return
 
     backends = active_image_gen_settings().api_backends()
-    if not backends or not any((b.model or "").strip() for b in backends):
+    runtime_mode = image_gen_config.runtime_mode
+    if runtime_mode != "ai_service_runtime" and (
+        not backends or not any((b.model or "").strip() for b in backends)
+    ):
         await pallas_draw.finish(
             message_at_user(
                 user_id,
@@ -407,21 +400,8 @@ async def pallas_draw_execute(
 ) -> bool:
     cfg = image_gen_config
     group_id = usage_key[0]
-    backends = cfg.api_backends()
-    default_prompt = (cfg.default_edit_prompt or "生成图像").strip()
-    if cfg.merge_reference_urls_into_prompt:
-        gen_prompt = " ".join([p for p in [text, *ref_urls] if p])
-    elif text.strip():
-        gen_prompt = text.strip()
-    elif ref_urls:
-        gen_prompt = default_prompt
-    else:
-        gen_prompt = default_prompt
-
+    gen_prompt = build_draw_gen_prompt(text, ref_urls)
     deadline = DrawDeadline(cfg.draw_total_timeout)
-    last_body: list[str] = [""]
-    last_status: list[int] = [0]
-
     req_timeout = cfg.request_timeout
     client_timeout = httpx.Timeout(
         connect=30.0, read=req_timeout, write=req_timeout, pool=req_timeout
@@ -432,171 +412,43 @@ async def pallas_draw_execute(
         async with httpx.AsyncClient(
             timeout=client_timeout, trust_env=True, limits=limits
         ) as http_client:
-            should_try_ai_runtime = cfg.runtime_mode == "ai_service_runtime"
-            if should_try_ai_runtime and ai_runtime_circuit_is_open():
-                circuit = ai_runtime_circuit_status()
-                logger.warning(
-                    f"bot [{bot_id}] draw ai runtime circuit open in group [{group_id}] "
-                    f"failures={circuit.consecutive_failures} "
-                    f"reason={circuit.recent_failure_reason or 'unknown'}",
-                )
-                should_try_ai_runtime = False
-
-            if should_try_ai_runtime:
-                ai_result = await generate_image_via_ai_service(
+            if cfg.runtime_mode == "ai_service_runtime":
+                ai_out = await run_ai_service_draw(
+                    matcher,
                     http_client,
+                    cfg=cfg,
                     bot_id=bot_id,
                     group_id=group_id,
                     user_id=user_id,
-                    prompt=gen_prompt,
-                    ref_urls=ref_urls,
-                    timeout_sec=request_timeout_for_deadline(
-                        deadline.remaining_seconds()
-                    ),
+                    usage_key=usage_key,
                     count_usage=count_usage,
+                    gen_prompt=gen_prompt,
+                    ref_urls=ref_urls,
+                    deadline=deadline,
                 )
-                if ai_result.pending_callback:
-                    return True
-                if ai_result.ok and ai_result.image_bytes is not None:
-                    record_ai_runtime_success()
-                    await reply_generated_image_bytes(
-                        matcher,
-                        ai_result.image_bytes,
-                        at_user_id=user_id,
-                        persist_draw=(usage_key[0], usage_key[1]),
-                    )
-                    from .draw_usage_store import bump_pallas_draw_usage
+                if ai_out.handled:
+                    return ai_out.image_sent
+                if not ai_out.fallback_plugin:
+                    await matcher.finish(message_at_user(user_id, DRAW_VAGUE_REPLY))
+                    return False
 
-                    bump_pallas_draw_usage(usage_key, count_usage)
-                    return True
-                record_ai_runtime_failure(ai_result.reply_text or "ai_runtime_failed")
-                logger.warning(
-                    f"bot [{bot_id}] draw ai runtime failed in group [{group_id}] "
-                    f"provider={ai_result.provider_id or '-'} "
-                    f"backend={ai_result.backend_id or '-'} "
-                    f"reply={ai_result.reply_text[:120]!r}",
-                )
-                if not cfg.ai_runtime_fallback_to_plugin:
-                    await matcher.finish(
-                        message_at_user(
-                            user_id, ai_result.reply_text or DRAW_VAGUE_REPLY
-                        )
-                    )
-                logger.info(
-                    f"bot [{bot_id}] draw fallback to plugin runtime in group [{group_id}]"
-                )
-
-            if ref_urls and cfg.use_edits_for_reference_images:
-                ref_dl_timeout = min(
-                    cfg.ref_download_timeout,
-                    max(1.0, deadline.remaining_seconds()),
-                )
-                blobs = await download_reference_images(
+            if should_run_plugin_gateway(cfg):
+                return await run_plugin_gateway_draw(
+                    matcher,
                     http_client,
-                    ref_urls,
-                    download_timeout=ref_dl_timeout,
-                )
-                if blobs:
-                    if len(ref_urls) > len(blobs):
-                        logger.warning(
-                            f"bot [{bot_id}] draw ref download partial in group [{group_id}]: "
-                            f"requested {len(ref_urls)} refs, got {len(blobs)} blobs",
-                        )
-                    edit_prompt = text.strip() or default_prompt
-                    edit_backends = image_backends_with_endpoint(
-                        backends, image_edits_endpoint
-                    )
-                    edits_abort = [False]
-
-                    async def post_edits(
-                        backend: ImageApiBackend, req_opts: ImageGenRequestOptions
-                    ) -> tuple[int, str]:
-                        return await post_edits_with_transport(
-                            http_client,
-                            blobs,
-                            edit_prompt,
-                            backend,
-                            options=req_opts,
-                            req_timeout_cap=request_timeout_for_deadline(
-                                deadline.remaining_seconds()
-                            ),
-                        )
-
-                    if await run_backend_param_attempts(
-                        matcher,
-                        http_client,
-                        bot_id,
-                        group_id,
-                        user_id,
-                        usage_key,
-                        count_usage,
-                        deadline,
-                        "edits",
-                        edit_backends,
-                        with_ref_urls=False,
-                        post_request=post_edits,
-                        last_body_holder=last_body,
-                        last_status_holder=last_status,
-                        edits_abort_holder=edits_abort,
-                    ):
-                        return True
-                    if edits_abort[0] or http_status_edits_unsupported(last_status[0]):
-                        logger.info(
-                            f"bot [{bot_id}] draw edits unsupported status={last_status[0]} "
-                            f"in group [{group_id}], fallback to generations",
-                        )
-                    else:
-                        logger.warning(
-                            f"bot [{bot_id}] draw edits exhausted in group [{group_id}], fallback to generations",
-                        )
-
-            payload_model = backends[0].model if backends else cfg.model
-            gen_backends = image_backends_with_endpoint(backends, image_gen_endpoint)
-
-            async def post_generations(
-                backend: ImageApiBackend, req_opts: ImageGenRequestOptions
-            ) -> tuple[int, str]:
-                gen_ep = image_gen_endpoint(backend)
-                headers = image_gen_auth_headers_json(backend)
-                payload = generations_payload(
-                    gen_prompt,
-                    ref_urls,
-                    model=backend.model or payload_model,
-                    backend=backend,
-                    options=req_opts,
-                )
-                return await post_generations_with_transport(
-                    http_client,
-                    gen_ep,
-                    headers,
-                    payload,
-                    req_timeout_cap=request_timeout_for_deadline(
-                        deadline.remaining_seconds()
-                    ),
+                    cfg=cfg,
+                    bot_id=bot_id,
+                    group_id=group_id,
+                    user_id=user_id,
+                    usage_key=usage_key,
+                    count_usage=count_usage,
+                    text=text,
+                    ref_urls=ref_urls,
+                    gen_prompt=gen_prompt,
+                    deadline=deadline,
                 )
 
-            if await run_backend_param_attempts(
-                matcher,
-                http_client,
-                bot_id,
-                group_id,
-                user_id,
-                usage_key,
-                count_usage,
-                deadline,
-                "generations",
-                gen_backends,
-                with_ref_urls=bool(ref_urls),
-                post_request=post_generations,
-                last_body_holder=last_body,
-                last_status_holder=last_status,
-            ):
-                return True
-
-            logger.error(
-                f"bot [{bot_id}] draw generations exhausted backends in group [{group_id}]",
-            )
-            await finish_draw_failure(matcher, user_id, last_body[0])
+            await matcher.finish(message_at_user(user_id, DRAW_VAGUE_REPLY))
             return False
     except FinishedException:
         raise

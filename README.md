@@ -10,6 +10,7 @@
   <img alt="官方插件" src="https://img.shields.io/badge/%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6-FE7D37">
   <img alt="控制台插件商店" src="https://img.shields.io/badge/%E6%8E%A7%E5%88%B6%E5%8F%B0-%E6%8F%92%E4%BB%B6%E5%95%86%E5%BA%97-4EA94B">
   <img alt="安装命令" src="https://img.shields.io/badge/uv%20run%20pallas%20ext%20install%20pallas--plugin--draw-586069">
+  <img alt="PyPI 版本" src="https://img.shields.io/pypi/v/pallas-plugin-draw?label=%E7%89%88%E6%9C%AC&color=2563EB">
 </p>
 
 ## 安装方式

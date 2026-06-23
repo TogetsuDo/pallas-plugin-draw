@@ -8,6 +8,7 @@ from pallas.api.metadata import (
 from pallas.api.metadata import SCENE_GROUP, join_usage, usage_line
 from pallas.api.platform import llm_command_tool_row
 from pallas.api.storage import plugin_storage_list, plugin_storage_row
+from pallas.product.llm.knowledge.declare import knowledge_source_row
 
 __plugin_meta__ = PluginMetadata(
     name="牛牛画画",
@@ -62,6 +63,39 @@ __plugin_meta__ = PluginMetadata(
                 "brief_des": "生图或改图",
                 "detail_des": "可纯文字，也可附图或回复图片作参考；次数用尽时会提示。",
             },
+        ],
+        "knowledge_sources": [
+            knowledge_source_row(
+                source_id="draw.faq",
+                title="牛牛画画说明",
+                description="群内文字生图与参考图改图",
+                chunks=[
+                    {
+                        "title": "如何生图",
+                        "content": (
+                            "在群内发送「牛牛画画」加画面描述即可按文字生图；"
+                            "描述尽量具体，保留用户原话效果更好。"
+                        ),
+                        "keywords": "画画,生图,画图,怎么画,牛牛画画",
+                    },
+                    {
+                        "title": "参考图改图",
+                        "content": (
+                            "可在「牛牛画画」消息中附图，或回复某张图片并发送改图描述；"
+                            "支持多张参考图。"
+                        ),
+                        "keywords": "改图,参考图,附图,回复图片,参考",
+                    },
+                    {
+                        "title": "与 draw.image 工具的分工",
+                        "content": (
+                            "闲聊中若用户想画画，可调用 draw.image 工具并带上 prompt；"
+                            "口令「牛牛画画 …」与工具效果一致，不要编造其它生图入口。"
+                        ),
+                        "keywords": "工具,draw.image,口令,生图",
+                    },
+                ],
+            ),
         ],
     },
 )

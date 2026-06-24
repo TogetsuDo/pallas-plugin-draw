@@ -19,7 +19,6 @@ from .image_api import (
     image_gen_auth_headers_json,
     image_gen_config,
 )
-from .runtime_state import ai_runtime_circuit_is_open, ai_runtime_circuit_status
 
 
 def transport_mode_for_settings(settings: ImageGenSettings) -> str:
@@ -86,11 +85,21 @@ def ai_runtime_status_line() -> str:
     if mode != "ai_service_runtime":
         return f"· AI runtime：未启用（当前为插件直连，{fallback_text}）"
 
-    state = ai_runtime_circuit_status()
-    if ai_runtime_circuit_is_open():
-        return f"· AI runtime：熔断中（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
-    if state.consecutive_failures > 0:
-        return f"· AI runtime：降级观察中（连续失败 {state.consecutive_failures} 次，{fallback_text}）"
+    try:
+        from pallas.api.ai_runtime_health import image_health_circuit_from_cache
+    except ImportError:
+        return f"· AI runtime：待探活（{fallback_text}）"
+
+    circuit = image_health_circuit_from_cache()
+    if not circuit:
+        return f"· AI runtime：待探活（{fallback_text}）"
+
+    circuit_state = str(circuit.get("circuit_state") or "closed").strip().lower()
+    consecutive_failures = int(circuit.get("consecutive_failures") or 0)
+    if circuit_state == "open":
+        return f"· AI runtime：AI 服务熔断中（连续失败 {consecutive_failures} 次，{fallback_text}）"
+    if circuit_state == "half_open" or consecutive_failures > 0:
+        return f"· AI runtime：AI 服务降级观察中（连续失败 {consecutive_failures} 次，{fallback_text}）"
     return f"· AI runtime：正常（{fallback_text}）"
 
 

@@ -19,9 +19,6 @@ class AiRuntimeCircuitState:
     recent_failure_reason: str = ""
 
 
-_ai_runtime_circuit = AiRuntimeCircuitState()
-
-
 async def acquire_draw_pending_slot() -> bool:
     """进程内画画任务占位；draw_max_pending<=0 时不限制。"""
     global _draw_pending
@@ -55,36 +52,34 @@ def sync_image_gen_semaphore(max_concurrency: int) -> None:
 
 
 def ai_runtime_circuit_is_open(now: float | None = None) -> bool:
-    current = time.time() if now is None else now
-    return _ai_runtime_circuit.circuit_open_until > current
+    _ = now
+    try:
+        from pallas.api.ai_runtime_health import image_runtime_circuit_is_open
+    except ImportError:
+        return False
+    return image_runtime_circuit_is_open()
 
 
 def record_ai_runtime_success() -> None:
-    _ai_runtime_circuit.consecutive_failures = 0
-    _ai_runtime_circuit.last_success_at = time.time()
-    _ai_runtime_circuit.circuit_open_until = 0.0
-    _ai_runtime_circuit.recent_failure_reason = ""
+    return
 
 
 def record_ai_runtime_failure(reason: str) -> None:
-    now = time.time()
-    _ai_runtime_circuit.consecutive_failures += 1
-    _ai_runtime_circuit.last_failure_at = now
-    _ai_runtime_circuit.recent_failure_reason = (reason or "").strip()
-    if (
-        _ai_runtime_circuit.consecutive_failures
-        >= image_gen_config.ai_runtime_open_circuit_failures
-    ):
-        _ai_runtime_circuit.circuit_open_until = (
-            now + image_gen_config.ai_runtime_circuit_cooldown_sec
-        )
+    _ = reason
+    return
 
 
 def ai_runtime_circuit_status() -> AiRuntimeCircuitState:
+    try:
+        from pallas.api.ai_runtime_health import image_runtime_circuit_snapshot
+    except ImportError:
+        return AiRuntimeCircuitState()
+    snap = image_runtime_circuit_snapshot()
+    open_now = ai_runtime_circuit_is_open()
     return AiRuntimeCircuitState(
-        consecutive_failures=_ai_runtime_circuit.consecutive_failures,
-        last_failure_at=_ai_runtime_circuit.last_failure_at,
-        last_success_at=_ai_runtime_circuit.last_success_at,
-        circuit_open_until=_ai_runtime_circuit.circuit_open_until,
-        recent_failure_reason=_ai_runtime_circuit.recent_failure_reason,
+        consecutive_failures=snap.consecutive_failures,
+        last_failure_at=0.0,
+        last_success_at=0.0,
+        circuit_open_until=time.time() + 60.0 if open_now else 0.0,
+        recent_failure_reason=snap.recent_failure_reason,
     )

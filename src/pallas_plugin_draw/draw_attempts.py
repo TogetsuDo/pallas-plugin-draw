@@ -25,6 +25,7 @@ from .image_api import (
     image_api_body_issue_label,
     message_at_user,
     reply_from_image_api_json,
+    request_timeout_for_backend_attempt,
 )
 from .image_request_options import ImageGenRequestOptions, capped_param_attempts
 from .replies import DRAW_VAGUE_REPLY
@@ -81,7 +82,8 @@ def format_transport_error(exc: BaseException) -> str:
 
 
 PostRequestFn = Callable[
-    [ImageApiBackend, ImageGenRequestOptions], Awaitable[tuple[int, str]]
+    [ImageApiBackend, ImageGenRequestOptions, float],
+    Awaitable[tuple[int, str]],
 ]
 
 
@@ -123,14 +125,21 @@ async def run_backend_param_attempts(
                     f"bot [{bot_id}] draw {op} retry params "
                     f"({req_opts.log_label()}) backend={backend.label} group=[{group_id}]",
                 )
+            req_timeout_cap = request_timeout_for_backend_attempt(
+                deadline.remaining_seconds(),
+                backends_remaining=len(backends) - idx,
+                param_attempts_remaining=len(param_attempts) - opt_idx,
+                primary_backend=(idx == 0),
+            )
             logger.info(
                 f"bot [{bot_id}] draw {op} request in group [{group_id}] "
-                f"backend={backend.label} params=({req_opts.log_label()})",
+                f"backend={backend.label} params=({req_opts.log_label()}) "
+                f"timeout_cap={req_timeout_cap:.0f}s",
             )
             req_started = time.perf_counter()
             try:
                 async with image_gen_semaphore:
-                    status, body_text = await post_request(backend, req_opts)
+                    status, body_text = await post_request(backend, req_opts, req_timeout_cap)
             except DrawTotalTimeoutError:
                 raise
             except (

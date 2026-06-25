@@ -187,6 +187,12 @@ class Config(BaseModel, extra="ignore"):
         le=1800.0,
         description="单次画画从进入队列到结束的上限（秒），含排队、下载参考图与多轮重试；偏慢上游宜加大。",
     )
+    pallas_image_backend_attempt_timeout: float = Field(
+        default=90.0,
+        ge=0.0,
+        le=600.0,
+        description="备用网关单次 POST 硬上限（秒）；主网关不受此项限制，仅用请求超时与总预算。0 表示备用仅用均分不设硬顶。",
+    )
     pallas_image_ref_download_timeout: float = Field(
         default=30.0,
         gt=1.0,
@@ -479,6 +485,10 @@ class ImageGenSettings:
     @property
     def draw_total_timeout(self) -> float:
         return self._c.pallas_image_draw_total_timeout
+
+    @property
+    def backend_attempt_timeout(self) -> float:
+        return self._c.pallas_image_backend_attempt_timeout
 
     @property
     def ref_download_timeout(self) -> float:

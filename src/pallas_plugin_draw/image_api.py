@@ -86,6 +86,30 @@ def request_timeout_for_deadline(remaining_seconds: float) -> float:
     return effective_request_timeout(remaining_seconds)
 
 
+_MIN_BACKEND_ATTEMPT_TIMEOUT = 20.0
+
+
+def request_timeout_for_backend_attempt(
+    remaining_seconds: float,
+    *,
+    backends_remaining: int,
+    param_attempts_remaining: int,
+    primary_backend: bool = False,
+) -> float:
+    """单次上游 POST 超时；主网关用满请求超时，备用网关按剩余预算均分。"""
+    base = effective_request_timeout(remaining_seconds)
+    if primary_backend:
+        return base
+    attempts_left = max(1, backends_remaining) * max(1, param_attempts_remaining)
+    if attempts_left <= 1:
+        return base
+    fair_share = max(_MIN_BACKEND_ATTEMPT_TIMEOUT, remaining_seconds / attempts_left)
+    hard_cap = image_gen_config.backend_attempt_timeout
+    if hard_cap > 0:
+        fair_share = min(fair_share, hard_cap)
+    return min(base, fair_share)
+
+
 def cffi_error_is_timeout(exc: BaseException) -> bool:
     msg = str(exc).lower()
     return "(28)" in msg or "timed out" in msg or "timeout" in msg

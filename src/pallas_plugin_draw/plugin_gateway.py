@@ -26,7 +26,6 @@ from .image_api import (
     image_gen_endpoint,
     post_edits_with_transport,
     post_generations_with_transport,
-    request_timeout_for_deadline,
     resolve_reference_urls_for_upstream,
 )
 
@@ -94,7 +93,9 @@ async def run_plugin_gateway_draw(
             edits_abort = [False]
 
             async def post_edits(
-                backend: ImageApiBackend, req_opts: ImageGenRequestOptions
+                backend: ImageApiBackend,
+                req_opts: ImageGenRequestOptions,
+                req_timeout_cap: float,
             ) -> tuple[int, str]:
                 return await post_edits_with_transport(
                     http_client,
@@ -102,9 +103,7 @@ async def run_plugin_gateway_draw(
                     edit_prompt,
                     backend,
                     options=req_opts,
-                    req_timeout_cap=request_timeout_for_deadline(
-                        deadline.remaining_seconds()
-                    ),
+                    req_timeout_cap=req_timeout_cap,
                 )
 
             if await run_backend_param_attempts(
@@ -139,7 +138,9 @@ async def run_plugin_gateway_draw(
     gen_backends = image_backends_with_endpoint(backends, image_gen_endpoint)
 
     async def post_generations(
-        backend: ImageApiBackend, req_opts: ImageGenRequestOptions
+        backend: ImageApiBackend,
+        req_opts: ImageGenRequestOptions,
+        req_timeout_cap: float,
     ) -> tuple[int, str]:
         gen_ep = image_gen_endpoint(backend)
         headers = image_gen_auth_headers_json(backend)
@@ -155,7 +156,7 @@ async def run_plugin_gateway_draw(
             gen_ep,
             headers,
             payload,
-            req_timeout_cap=request_timeout_for_deadline(deadline.remaining_seconds()),
+            req_timeout_cap=req_timeout_cap,
         )
 
     if await run_backend_param_attempts(

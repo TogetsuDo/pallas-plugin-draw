@@ -31,6 +31,7 @@ __plugin_meta__ = PluginMetadata(
         ],
         "command_limits": [
             {"id": "draw.draw", "cd_sec": 3},
+            {"id": "draw.gateway", "cd_sec": 3},
         ],
         "llm_tools": [
             llm_command_tool_row(

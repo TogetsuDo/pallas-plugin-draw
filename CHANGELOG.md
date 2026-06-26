@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+## [4.0.10] - 2026-06-27
+- fix(gateway_probe): 插件直连模式不展示 AI runtime 状态行
+
 ## [4.0.9] - 2026-06-25
 - feat(draw): 备用网关单次超时与请求预算均分
 

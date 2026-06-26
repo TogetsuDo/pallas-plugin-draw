@@ -80,10 +80,9 @@ def format_gateway_status_text(results: list[ServiceProbeResult]) -> str:
 
 def ai_runtime_status_line() -> str:
     cfg = image_gen_config
-    mode = cfg.runtime_mode
+    if cfg.runtime_mode != "ai_service_runtime":
+        return ""
     fallback_text = "开启回退" if cfg.ai_runtime_fallback_to_plugin else "不回退"
-    if mode != "ai_service_runtime":
-        return f"· AI runtime：未启用（当前为插件直连，{fallback_text}）"
 
     try:
         from pallas.api.ai_runtime_health import image_health_circuit_from_cache

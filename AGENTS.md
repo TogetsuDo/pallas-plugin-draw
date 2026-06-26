@@ -30,3 +30,4 @@ uv run pytest ../Pallas-Plugin-Draw/tests/ -q
 - 仅改 `src/`；通过 `pallas-bot` 公开 API（`src.features` / `src.platform`）访问内核，勿反向依赖本体 `src/plugins`。
 - 分片协调在插件 `on_startup` 调用 `register_*_coord()`（见本体 `src/features/plugin_coord/`）。
 - 提交前 `ruff check` + `ruff format --check` 通过。
+- 维护 `CHANGELOG.md`（[Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)）：日常改动记入 `## [Unreleased]`，发布版本时归档到 `## [X.Y.Z]` 并打 `vX.Y.Z` git tag（触发 PyPI 发布）。

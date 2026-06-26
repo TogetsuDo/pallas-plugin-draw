@@ -139,7 +139,9 @@ async def run_backend_param_attempts(
             req_started = time.perf_counter()
             try:
                 async with image_gen_semaphore:
-                    status, body_text = await post_request(backend, req_opts, req_timeout_cap)
+                    status, body_text = await post_request(
+                        backend, req_opts, req_timeout_cap
+                    )
             except DrawTotalTimeoutError:
                 raise
             except (

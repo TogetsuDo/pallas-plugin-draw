@@ -1,0 +1,41 @@
+# 更新日志
+
+本文件依据 git tag 历史整理，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
+新提交合入后请在 `## [Unreleased]` 下记录，发布时随版本 tag 归档。
+
+## [Unreleased]
+
+## [4.0.9] - 2026-06-25
+- feat(draw): 备用网关单次超时与请求预算均分
+
+## [4.0.8] - 2026-06-25
+- refactor(draw): 熔断状态改读 AI /health 缓存
+- feat(metadata): 补充画画网关命令冷却声明
+
+## [4.0.7] - 2026-06-24
+- feat(knowledge): 声明 knowledge_sources FAQ 供 LLM 注入
+
+## [4.0.6] - 2026-06-19
+- docs(assets): 更新头像资源并改用 PyPI 版本徽章
+- chore(assets): 替换品牌头像为透明背景版本
+
+## [4.0.5] - 2026-06-18
+- docs(readme): 统一官方插件卡片模板
+
+## [4.0.4] - 2026-06-18
+- docs(readme): 更新官方扩展安装命令
+
+## [4.0.3] - 2026-06-18
+- migrate: src.* → pallas.api.* / pallas.product.* / pallas.core.*
+- release: bump to 4.0.3 for pallas import migration
+
+## [4.0.2] - 2026-06-18
+- docs(readme): 添加 Pallas-Bot hero 图
+- feat(draw): AI 服务双栈模式与插件层 runtime 止血
+- feat(draw): 对齐 bundled draw 的 media task callback 慢路径
+- feat(draw): 4.0.2 瘦身并承接 AI runtime 主路径
+
+## [4.0.1] - 2026-06-17
+- feat: Pallas-Bot 4.0 官方扩展首包
+- fix(build): 修正 hatch wheel 的 src 包路径
+- feat(release): PyPI 发版 workflow 与 4.0.1

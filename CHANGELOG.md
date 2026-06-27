@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+## [4.0.11] - 2026-06-27
+- docs(readme): 「怎么使用」口令统一加行内代码标记
+
 ## [4.0.10] - 2026-06-27
 - fix(gateway_probe): 插件直连模式不展示 AI runtime 状态行
 

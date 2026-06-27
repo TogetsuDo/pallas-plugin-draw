@@ -43,7 +43,7 @@ uv pip install pallas-plugin-draw
 
 | 命令 ID | 默认等级 |
 | --- | --- |
-| `draw.draw` | everyone |
+| `draw.draw` | 所有人 |
 
 > 详细用法、限制条件和可用范围以帮助为主。
 

@@ -318,7 +318,7 @@ wheels = [
 
 [[package]]
 name = "pallas-plugin-draw"
-version = "4.0.10"
+version = "4.0.12"
 source = { editable = "." }
 dependencies = [
     { name = "nonebot-adapter-onebot" },

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -205,7 +205,7 @@ class Config(BaseModel, extra="ignore"):
         le=64,
         description="进程内同时进行中的画画任务上限（含已回复「欢呼吧」尚未结束的）；0 不限制。",
     )
-    pallas_image_runtime_mode: str = Field(
+    pallas_image_runtime_mode: Literal["ai_service_runtime", "plugin_runtime"] = Field(
         default="ai_service_runtime",
         description=field_help(
             "画图运行模式",

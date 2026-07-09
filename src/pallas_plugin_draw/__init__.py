@@ -27,11 +27,9 @@ __plugin_meta__ = PluginMetadata(
         "command_prefixes": ["牛牛画画"],
         "command_permissions": [
             {"id": "draw.draw", "label": "牛牛画画", "default": "everyone"},
-            {"id": "draw.gateway", "label": "牛牛网关", "default": "everyone"},
         ],
         "command_limits": [
             {"id": "draw.draw", "cd_sec": 3},
-            {"id": "draw.gateway", "cd_sec": 3},
         ],
         "llm_tools": [
             llm_command_tool_row(

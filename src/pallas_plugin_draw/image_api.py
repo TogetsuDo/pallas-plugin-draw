@@ -13,11 +13,11 @@ from curl_cffi.requests import RequestsError as CffiRequestsError
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Message, MessageSegment
 
-from pallas.api.media import draw_reference_download_options
 from pallas.api.media import (
     ReferenceResolveResult,
     bytes_from_reference_token,
     decode_inline_image_reference,
+    draw_reference_download_options,
     resolve_reference_inline_urls,
     strip_data_url_base64,
 )
@@ -96,10 +96,19 @@ def request_timeout_for_backend_attempt(
     param_attempts_remaining: int,
     primary_backend: bool = False,
 ) -> float:
-    """单次上游 POST 超时；主网关用满请求超时，备用网关按剩余预算均分。"""
+    """单次上游 POST 超时。
+
+    仅一个网关时用满请求超时；有备线时为主网关预留后续预算，避免一次读超时耗尽总超时。
+    备用网关按剩余预算均分。
+    """
     base = effective_request_timeout(remaining_seconds)
-    if primary_backend:
+    if backends_remaining <= 1 and primary_backend:
         return base
+    if primary_backend and backends_remaining > 1:
+        # 主网关不套用 backend_attempt_timeout 硬顶，只预留备线最低预算。
+        reserve = _MIN_BACKEND_ATTEMPT_TIMEOUT * (backends_remaining - 1)
+        available = max(_MIN_BACKEND_ATTEMPT_TIMEOUT, remaining_seconds - reserve)
+        return min(base, available)
     attempts_left = max(1, backends_remaining) * max(1, param_attempts_remaining)
     if attempts_left <= 1:
         return base

@@ -153,22 +153,23 @@ async def run_backend_param_attempts(
                 RuntimeError,
             ) as e:
                 err_text = format_transport_error(e)
+                # 传输层失败（超时/断连等）优先切备线，避免主网关参数重试耗尽总超时。
+                if has_more_backend:
+                    logger.info(
+                        f"bot [{bot_id}] draw {op} transport error "
+                        f"backend={backend.label} group=[{group_id}]: {err_text}, trying next backend",
+                    )
+                    break
                 if has_more_opts:
                     logger.info(
                         f"bot [{bot_id}] draw {op} transport error "
                         f"backend={backend.label} group=[{group_id}]: {err_text}, trying next params",
                     )
                     continue
-                if has_more_backend:
-                    logger.info(
-                        f"bot [{bot_id}] draw {op} transport error "
-                        f"backend={backend.label} group=[{group_id}]: {err_text}, trying next backend",
-                    )
-                else:
-                    logger.warning(
-                        f"bot [{bot_id}] draw {op} transport error "
-                        f"backend={backend.label} group=[{group_id}]: {err_text}",
-                    )
+                logger.warning(
+                    f"bot [{bot_id}] draw {op} transport error "
+                    f"backend={backend.label} group=[{group_id}]: {err_text}",
+                )
                 break
             last_body_holder[:] = [body_text]
             last_status_holder[:] = [status]

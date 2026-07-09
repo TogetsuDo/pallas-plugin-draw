@@ -38,10 +38,25 @@ def test_request_timeout_for_backend_attempt_single_slot_uses_full_budget() -> N
 def test_request_timeout_for_backend_attempt_primary_uses_full_budget() -> None:
     assert request_timeout_for_backend_attempt(
         480.0,
-        backends_remaining=4,
+        backends_remaining=1,
         param_attempts_remaining=2,
         primary_backend=True,
     ) == effective_request_timeout(480.0)
+
+
+def test_request_timeout_for_backend_attempt_primary_reserves_fallback_budget() -> None:
+    cap = request_timeout_for_backend_attempt(
+        480.0,
+        backends_remaining=2,
+        param_attempts_remaining=2,
+        primary_backend=True,
+    )
+    # 预留 20s 给备线；同时仍受 request_timeout 上限约束。
+    assert cap == min(effective_request_timeout(480.0), 460.0)
+    assert (
+        cap < effective_request_timeout(480.0)
+        or effective_request_timeout(480.0) <= 460.0
+    )
 
 
 def test_request_timeout_for_backend_attempt_fallback_splits_budget() -> None:
@@ -54,10 +69,14 @@ def test_request_timeout_for_backend_attempt_fallback_splits_budget() -> None:
     assert cap == 40.0
 
 
-def test_request_timeout_for_backend_attempt_fallback_respects_hard_cap(monkeypatch) -> None:
+def test_request_timeout_for_backend_attempt_fallback_respects_hard_cap(
+    monkeypatch,
+) -> None:
     from pallas_plugin_draw.config import image_gen_config
 
-    monkeypatch.setattr(image_gen_config._c, "pallas_image_backend_attempt_timeout", 45.0)
+    monkeypatch.setattr(
+        image_gen_config._c, "pallas_image_backend_attempt_timeout", 45.0
+    )
     cap = request_timeout_for_backend_attempt(
         240.0,
         backends_remaining=2,

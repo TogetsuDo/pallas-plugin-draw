@@ -59,6 +59,34 @@ def reference_urls_for_payload(ref_urls: list[str]) -> list[str]:
     return out
 
 
+def gateway_payload_from_backends(backends: list | None) -> dict | None:
+    """将 Bot ImageApiBackend 列表转为 AI payload.gateway（不含日志密钥）。"""
+    if not backends:
+        return None
+    rows: list[dict] = []
+    for item in backends:
+        base_url = str(getattr(item, "base_url", "") or "").strip()
+        api_key = str(getattr(item, "api_key", "") or "").strip()
+        if not base_url or not api_key:
+            continue
+        rows.append(
+            {
+                "base_url": base_url,
+                "api_key": api_key,
+                "model": str(getattr(item, "model", "") or "").strip(),
+                "omit_response_format": bool(
+                    getattr(item, "omit_response_format", False)
+                ),
+                "name": str(
+                    getattr(item, "name", "") or getattr(item, "label", "") or ""
+                ).strip(),
+            }
+        )
+    if not rows:
+        return None
+    return {"backends": rows}
+
+
 def build_image_request_payload(
     *,
     request_id: str,
@@ -69,7 +97,14 @@ def build_image_request_payload(
     ref_urls: list[str],
     timeout_sec: float,
     force_task_mode: bool,
+    gateway: dict | None = None,
 ) -> dict:
+    payload_body: dict = {
+        "prompt": prompt,
+        "reference_urls": reference_urls_for_payload(ref_urls),
+    }
+    if gateway:
+        payload_body["gateway"] = gateway
     return {
         "request_id": request_id,
         "capability": "image.generate",
@@ -93,10 +128,7 @@ def build_image_request_payload(
             "force_task_mode": force_task_mode,
             "deliver_mode": "callback" if force_task_mode else "poll",
         },
-        "payload": {
-            "prompt": prompt,
-            "reference_urls": reference_urls_for_payload(ref_urls),
-        },
+        "payload": payload_body,
     }
 
 
@@ -200,6 +232,7 @@ async def generate_image_via_ai_service(
     ref_urls: list[str],
     timeout_sec: float,
     count_usage: bool = False,
+    gateway: dict | None = None,
 ) -> AiImageResult:
     from pallas.api.config import TaskManager
 
@@ -214,6 +247,7 @@ async def generate_image_via_ai_service(
         ref_urls=ref_urls,
         timeout_sec=timeout_sec,
         force_task_mode=use_task_mode,
+        gateway=gateway,
     )
     endpoint = media_task_endpoint() if use_task_mode else image_generate_endpoint()
     if use_task_mode:

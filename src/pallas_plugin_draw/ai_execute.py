@@ -13,7 +13,10 @@ if TYPE_CHECKING:
     from .config import ImageGenSettings
     from .draw_attempts import DrawDeadline
 
-from .ai_runtime_client import generate_image_via_ai_service
+from .ai_runtime_client import (
+    gateway_payload_from_backends,
+    generate_image_via_ai_service,
+)
 from .draw_usage_store import bump_pallas_draw_usage
 from .image_api import (
     message_at_user,
@@ -71,6 +74,7 @@ async def run_ai_service_draw(
         ref_urls=ref_urls,
         timeout_sec=request_timeout_for_deadline(deadline.remaining_seconds()),
         count_usage=count_usage,
+        gateway=gateway_payload_from_backends(cfg.api_backends()),
     )
     if ai_result.pending_callback:
         return AiDrawRunResult(handled=True, image_sent=True)

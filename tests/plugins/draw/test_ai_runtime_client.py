@@ -41,6 +41,43 @@ def test_build_image_request_payload_sends_all_reference_urls() -> None:
     assert payload["payload"]["reference_urls"] == [data_url, http_url]
 
 
+def test_build_image_request_payload_includes_gateway_backends() -> None:
+    from pallas_plugin_draw.ai_runtime_client import gateway_payload_from_backends
+    from pallas_plugin_draw.config import ImageApiBackend
+
+    gateway = gateway_payload_from_backends(
+        [
+            ImageApiBackend(
+                base_url="https://aigateway.example/",
+                api_key="sk-a",
+                model="gpt-image-2",
+                label="primary",
+            ),
+            ImageApiBackend(
+                base_url="https://packy.example/",
+                api_key="sk-b",
+                model="gpt-image-2",
+                label="fallback-0",
+                omit_response_format=True,
+            ),
+        ]
+    )
+    payload = build_image_request_payload(
+        request_id="req-gw",
+        bot_id=1,
+        group_id=2,
+        user_id=3,
+        prompt="test",
+        ref_urls=[],
+        timeout_sec=30.0,
+        force_task_mode=False,
+        gateway=gateway,
+    )
+    assert payload["payload"]["gateway"]["backends"][0]["base_url"] == "https://aigateway.example/"
+    assert payload["payload"]["gateway"]["backends"][1]["omit_response_format"] is True
+    assert "api_key" in payload["payload"]["gateway"]["backends"][0]
+
+
 @pytest.mark.asyncio
 async def test_generate_image_task_mode_registers_callback_task(monkeypatch: pytest.MonkeyPatch) -> None:
     add_task = AsyncMock()

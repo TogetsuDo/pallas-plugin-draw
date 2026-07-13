@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+## [4.0.15] - 2026-07-13
+
+- fix(draw): 画画消息去重签名纳入时间戳，同描述可多次生图
+
 ## [4.0.14] - 2026-07-10
 - chore(draw): 移除冗余「牛牛网关」命令声明（改由内核牛牛连通提供）
 - feat(config): `pallas_image_runtime_mode` 改为枚举，WebUI 下拉选择

@@ -306,6 +306,7 @@ async def pallas_draw_handle(
         event.user_id,
         event.get_plaintext(),
         event.time,
+        include_message_time=True,
     ):
         return
 

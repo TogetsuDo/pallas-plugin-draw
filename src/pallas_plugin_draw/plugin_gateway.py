@@ -1,4 +1,4 @@
-"""插件直连图像网关（plugin_runtime / AI 失败回退，兼容期）。"""
+"""插件直连图像网关（默认 plugin_runtime）。"""
 
 from __future__ import annotations
 

@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+## [4.0.17] - 2026-07-20
+
+- feat(config): 默认 `plugin_runtime` 直连画画网关；`ai_service_runtime` 降为兼容旧路径
+- docs: README 实现说明与默认模式对齐
+
 ## [4.0.16] - 2026-07-13
 
 - feat(draw): `ai_service_runtime` 请求携带 Bot 画画网关（主+备线）供 AI 按序执行

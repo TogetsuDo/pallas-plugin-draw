@@ -22,7 +22,6 @@ from pallas.api.platform import (
     try_claim_group_message_once,
 )
 
-from .ai_execute import run_ai_service_draw
 from .config import active_image_gen_settings, image_gen_config
 from .draw_attempts import DrawDeadline, DrawTotalTimeoutError
 from .draw_usage_store import pallas_draw_usage_today
@@ -121,14 +120,6 @@ def build_draw_gen_prompt(text: str, ref_urls: list[str]) -> str:
     if ref_urls:
         return default_prompt
     return default_prompt
-
-
-def should_run_plugin_gateway(cfg) -> bool:
-    if cfg.runtime_mode == "plugin_runtime":
-        return True
-    return (
-        cfg.runtime_mode == "ai_service_runtime" and cfg.ai_runtime_fallback_to_plugin
-    )
 
 
 _MAX_PALLAS_DRAW_USER_LOCKS = 8192
@@ -237,10 +228,7 @@ async def pallas_draw_handle(
         return
 
     backends = active_image_gen_settings().api_backends()
-    runtime_mode = image_gen_config.runtime_mode
-    if runtime_mode != "ai_service_runtime" and (
-        not backends or not any((b.model or "").strip() for b in backends)
-    ):
+    if not backends or not any((b.model or "").strip() for b in backends):
         await pallas_draw.finish(
             message_at_user(
                 user_id,
@@ -413,44 +401,20 @@ async def pallas_draw_execute(
         async with httpx.AsyncClient(
             timeout=client_timeout, trust_env=True, limits=limits
         ) as http_client:
-            if cfg.runtime_mode == "ai_service_runtime":
-                ai_out = await run_ai_service_draw(
-                    matcher,
-                    http_client,
-                    cfg=cfg,
-                    bot_id=bot_id,
-                    group_id=group_id,
-                    user_id=user_id,
-                    usage_key=usage_key,
-                    count_usage=count_usage,
-                    gen_prompt=gen_prompt,
-                    ref_urls=ref_urls,
-                    deadline=deadline,
-                )
-                if ai_out.handled:
-                    return ai_out.image_sent
-                if not ai_out.fallback_plugin:
-                    await matcher.finish(message_at_user(user_id, DRAW_VAGUE_REPLY))
-                    return False
-
-            if should_run_plugin_gateway(cfg):
-                return await run_plugin_gateway_draw(
-                    matcher,
-                    http_client,
-                    cfg=cfg,
-                    bot_id=bot_id,
-                    group_id=group_id,
-                    user_id=user_id,
-                    usage_key=usage_key,
-                    count_usage=count_usage,
-                    text=text,
-                    ref_urls=ref_urls,
-                    gen_prompt=gen_prompt,
-                    deadline=deadline,
-                )
-
-            await matcher.finish(message_at_user(user_id, DRAW_VAGUE_REPLY))
-            return False
+            return await run_plugin_gateway_draw(
+                matcher,
+                http_client,
+                cfg=cfg,
+                bot_id=bot_id,
+                group_id=group_id,
+                user_id=user_id,
+                usage_key=usage_key,
+                count_usage=count_usage,
+                text=text,
+                ref_urls=ref_urls,
+                gen_prompt=gen_prompt,
+                deadline=deadline,
+            )
     except FinishedException:
         raise
     except DrawTotalTimeoutError:

@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-07-24
+
+- feat(config): 主/备线可填 `provider_id`，运行时沿用 AI · Provider 的 base_url 与 api_key
+- breaking(config): 移除 `pallas_image_runtime_mode` 与 AI Runtime 回退/熔断项；画画仅插件直连网关
+- docs(readme): 实现说明与仅直连网关对齐
+
 ## [4.0.17] - 2026-07-20
 
 - feat(config): 默认 `plugin_runtime` 直连画画网关；`ai_service_runtime` 降为兼容旧路径

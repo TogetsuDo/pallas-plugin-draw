@@ -2,7 +2,6 @@ from pallas.api.probe import ServiceProbeResult
 from pallas_plugin_draw.config import Config, ImageApiBackend, ImageGenSettings
 from pallas_plugin_draw.gateway_probe import (
     IMAGE_PROBE_CATEGORY,
-    ai_runtime_status_line,
     backend_display_site,
     backend_site_name,
     format_gateway_status_lines,
@@ -38,19 +37,6 @@ def test_models_probe_urls() -> None:
     assert urls == ["https://api.example.com/v1/models"]
 
 
-def test_ai_runtime_status_line_empty_in_plugin_runtime(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "pallas_plugin_draw.gateway_probe.image_gen_config",
-        ImageGenSettings(
-            Config(
-                pallas_image_runtime_mode="plugin_runtime",
-                pallas_image_ai_runtime_fallback_to_plugin=True,
-            )
-        ),
-    )
-    assert ai_runtime_status_line() == ""
-
-
 def test_format_gateway_status_lines() -> None:
     results = [
         ServiceProbeResult(IMAGE_PROBE_CATEGORY, "主站", True, 120, 200, None),
@@ -75,4 +61,6 @@ def test_api_backends_includes_primary_and_fallback() -> None:
     backends = ImageGenSettings(cfg).api_backends()
     assert len(backends) == 2
     assert backends[0].label == "primary"
+    assert backends[0].base_url == "https://a.example"
     assert backends[1].label == "fallback-0"
+    assert backends[1].base_url == "https://b.example"

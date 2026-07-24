@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, Self
+from typing import Any, Self
 
+from nonebot import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 from pallas.api.config import config_from_env, install_hot_reload_config
 from pallas.api.config import field_help
+from pallas.api.llm import (
+    find_provider,
+    resolve_provider_api_key,
+    resolve_provider_base_url,
+)
 
 
 class ImageBackendEntry(BaseModel):
@@ -18,6 +24,13 @@ class ImageBackendEntry(BaseModel):
         description=field_help(
             "这条备用线路在检测和命令里显示的名字",
             "可自拟，例如「备线1」；留空则自动显示为备线序号",
+        ),
+    )
+    provider_id: str = Field(
+        default="",
+        description=field_help(
+            "沿用已配置的 LLM Provider（可选）",
+            "填写 Provider id 后，本条 base_url / api_key 以 Provider 为准；须支持 images API",
         ),
     )
     base_url: str = Field(
@@ -55,6 +68,13 @@ class Config(BaseModel, extra="ignore"):
         default=5,
         description="「牛牛画画」等指令的插件优先级下限；数值越大越晚处理，便于被其他插件拦截。",
     )
+    pallas_image_provider_id: str = Field(
+        default="",
+        description=field_help(
+            "主线路沿用的 LLM Provider（可选）",
+            "填写后主线路 base_url / api_key 从 AI · Provider 读取，无需再抄密钥；须支持 images API",
+        ),
+    )
     pallas_image_base_url: str = Field(
         default="",
         description=field_help(
@@ -81,7 +101,7 @@ class Config(BaseModel, extra="ignore"):
         default_factory=list,
         description=field_help(
             "主线路不可用时的备用画图服务列表",
-            "JSON 数组，每项至少含 base_url 与 api_key；主配置失败时按顺序尝试",
+            "JSON 数组，每项可含 provider_id，或至少含 base_url 与 api_key；主配置失败时按顺序尝试",
             "详细列表可在「插件 → 牛牛画画」页编辑",
         ),
     )
@@ -205,29 +225,6 @@ class Config(BaseModel, extra="ignore"):
         le=64,
         description="进程内同时进行中的画画任务上限（含已回复「欢呼吧」尚未结束的）；0 不限制。",
     )
-    pallas_image_runtime_mode: Literal["ai_service_runtime", "plugin_runtime"] = Field(
-        default="plugin_runtime",
-        description=field_help(
-            "画图运行模式",
-            "推荐 plugin_runtime：Bot 进程直连画画网关；ai_service_runtime 为经 AI Runtime 的兼容旧路径",
-        ),
-    )
-    pallas_image_ai_runtime_fallback_to_plugin: bool = Field(
-        default=False,
-        description="仅 ai_service_runtime：AI 服务画图失败时是否回退到插件直连网关（默认关闭）。",
-    )
-    pallas_image_ai_runtime_open_circuit_failures: int = Field(
-        default=3,
-        ge=1,
-        le=20,
-        description="AI 服务连续失败达到该次数后，短期开启熔断。",
-    )
-    pallas_image_ai_runtime_circuit_cooldown_sec: int = Field(
-        default=120,
-        ge=5,
-        le=3600,
-        description="AI 服务熔断开启后的冷却时间（秒）；冷却期内优先走回退链路。",
-    )
 
     @classmethod
     def from_env(cls) -> Self:
@@ -236,8 +233,63 @@ class Config(BaseModel, extra="ignore"):
         )
 
 
+def normalize_image_base_url(url: str) -> str:
+    """画画侧会再拼 /v1/images/...；去掉末尾 / 与尾部 /v1，避免路径重复。"""
+    text = (url or "").strip()
+    if not text:
+        return ""
+    while text.endswith("/"):
+        text = text[:-1]
+    if text.lower().endswith("/v1"):
+        text = text[:-3]
+        while text.endswith("/"):
+            text = text[:-1]
+    return text
+
+
+def resolve_gateway_credentials(
+    *,
+    provider_id: str,
+    base_url: str,
+    api_key: str,
+    model: str,
+    default_model: str,
+    label: str,
+) -> tuple[str, str, str] | None:
+    """解析单条网关凭证。有 provider_id 时以 Provider 为准；否则要求显式 url+key。"""
+    pid = (provider_id or "").strip()
+    if pid:
+        row = find_provider(pid)
+        if row is None:
+            logger.warning(
+                "draw 网关 {} 引用的 Provider 不存在或未启用: {}", label, pid
+            )
+            return None
+        url = normalize_image_base_url(resolve_provider_base_url(row))
+        key = resolve_provider_api_key(row).strip()
+        if not url or not key:
+            logger.warning(
+                "draw 网关 {} 沿用 Provider {} 后缺少 base_url 或 api_key",
+                label,
+                pid,
+            )
+            return None
+        provider_model = str(row.get("default_model") or "").strip()
+        resolved_model = (model or "").strip() or default_model or provider_model
+        return url, key, resolved_model
+
+    url = normalize_image_base_url(base_url)
+    key = (api_key or "").strip()
+    if not url or not key:
+        return None
+    resolved_model = (model or "").strip() or default_model
+    return url, key, resolved_model
+
+
 def migrate_legacy_gateway_config(c: Config) -> Config:
     """旧部署仅写 api_backends、主站 base_url/api_key 为空时，将首条有效备选提升为主网关。"""
+    if (c.pallas_image_provider_id or "").strip():
+        return c
     if (c.pallas_image_base_url or "").strip() and (
         c.pallas_image_api_key or ""
     ).strip():
@@ -246,6 +298,8 @@ def migrate_legacy_gateway_config(c: Config) -> Config:
     if not backends:
         return c
     first = backends[0]
+    if (first.provider_id or "").strip():
+        return c
     first_url = (first.base_url or "").strip()
     first_key = (first.api_key or "").strip()
     if not first_url or not first_key:
@@ -355,23 +409,30 @@ class ImageGenSettings:
                 )
             )
 
-        primary_url = (self._c.pallas_image_base_url or "").strip()
-        primary_key = (self._c.pallas_image_api_key or "").strip()
         primary_name = (self._c.pallas_image_primary_name or "").strip()
-        if primary_url and primary_key:
-            append(
-                primary_url,
-                primary_key,
-                default_model,
-                "primary",
-                name=primary_name,
-            )
+        primary = resolve_gateway_credentials(
+            provider_id=self._c.pallas_image_provider_id,
+            base_url=self._c.pallas_image_base_url,
+            api_key=self._c.pallas_image_api_key,
+            model=default_model,
+            default_model=default_model,
+            label="primary",
+        )
+        if primary is not None:
+            url, key, model = primary
+            append(url, key, model, "primary", name=primary_name)
         for i, entry in enumerate(self._c.pallas_image_api_backends):
-            url = (entry.base_url or "").strip()
-            key = (entry.api_key or "").strip()
-            if not url or not key:
+            resolved = resolve_gateway_credentials(
+                provider_id=entry.provider_id,
+                base_url=entry.base_url,
+                api_key=entry.api_key,
+                model=(entry.model or "").strip(),
+                default_model=default_model,
+                label=f"fallback-{i}",
+            )
+            if resolved is None:
                 continue
-            model = (entry.model or "").strip() or default_model
+            url, key, model = resolved
             append(
                 url,
                 key,
@@ -497,23 +558,6 @@ class ImageGenSettings:
     @property
     def draw_max_pending(self) -> int:
         return self._c.pallas_image_draw_max_pending
-
-    @property
-    def runtime_mode(self) -> str:
-        raw = (self._c.pallas_image_runtime_mode or "plugin_runtime").strip().lower()
-        return "ai_service_runtime" if raw == "ai_service_runtime" else "plugin_runtime"
-
-    @property
-    def ai_runtime_fallback_to_plugin(self) -> bool:
-        return self._c.pallas_image_ai_runtime_fallback_to_plugin
-
-    @property
-    def ai_runtime_open_circuit_failures(self) -> int:
-        return self._c.pallas_image_ai_runtime_open_circuit_failures
-
-    @property
-    def ai_runtime_circuit_cooldown_sec(self) -> int:
-        return self._c.pallas_image_ai_runtime_circuit_cooldown_sec
 
 
 def on_draw_config_reload(cfg: Config) -> None:

@@ -65,41 +65,11 @@ def models_probe_urls(backend: ImageApiBackend) -> list[str]:
 
 
 def format_gateway_status_lines(results: list[ServiceProbeResult]) -> list[str]:
-    lines = format_probe_lines(results)
-    runtime_line = ai_runtime_status_line()
-    if not runtime_line:
-        return lines
-    if not lines:
-        return [f"【{IMAGE_PROBE_CATEGORY}】", runtime_line]
-    return [*lines, runtime_line]
+    return format_probe_lines(results)
 
 
 def format_gateway_status_text(results: list[ServiceProbeResult]) -> str:
     return "\n".join(format_gateway_status_lines(results))
-
-
-def ai_runtime_status_line() -> str:
-    cfg = image_gen_config
-    if cfg.runtime_mode != "ai_service_runtime":
-        return ""
-    fallback_text = "开启回退" if cfg.ai_runtime_fallback_to_plugin else "不回退"
-
-    try:
-        from pallas.api.ai_runtime_health import image_health_circuit_from_cache
-    except ImportError:
-        return f"· AI runtime：待探活（{fallback_text}）"
-
-    circuit = image_health_circuit_from_cache()
-    if not circuit:
-        return f"· AI runtime：待探活（{fallback_text}）"
-
-    circuit_state = str(circuit.get("circuit_state") or "closed").strip().lower()
-    consecutive_failures = int(circuit.get("consecutive_failures") or 0)
-    if circuit_state == "open":
-        return f"· AI runtime：AI 服务熔断中（连续失败 {consecutive_failures} 次，{fallback_text}）"
-    if circuit_state == "half_open" or consecutive_failures > 0:
-        return f"· AI runtime：AI 服务降级观察中（连续失败 {consecutive_failures} 次，{fallback_text}）"
-    return f"· AI runtime：正常（{fallback_text}）"
 
 
 def image_gen_settings_from_draft(draft: dict[str, Any] | None) -> ImageGenSettings:

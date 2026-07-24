@@ -49,9 +49,6 @@ async def test_draw_handle_skips_claim_when_backend_missing(monkeypatch):
     monkeypatch.setattr(mod, "draw_group_allowed", lambda _gid: True)
     monkeypatch.setattr(mod, "draw_group_cooldown_ready", AsyncMock(return_value=True))
     monkeypatch.setattr(
-        mod, "image_gen_config", SimpleNamespace(runtime_mode="plugin_runtime")
-    )
-    monkeypatch.setattr(
         mod, "active_image_gen_settings", lambda: SimpleNamespace(api_backends=list)
     )
     monkeypatch.setattr(mod, "try_claim_group_message_once", fake_claim)
@@ -285,59 +282,3 @@ async def test_draw_handle_same_body_different_time_cheers_twice(monkeypatch):
 
     assert sent == ["欢呼吧！", "欢呼吧！"]
     assert len(queued) == 2
-
-
-@pytest.mark.asyncio
-async def test_draw_execute_skips_plugin_gateway_when_ai_only(monkeypatch):
-    from pallas_plugin_draw import ai_execute as ai_exec
-    from pallas_plugin_draw import draw as mod
-    from pallas_plugin_draw import plugin_gateway as plugin_mod
-
-    finish_msgs: list[str] = []
-
-    async def fake_finish(msg):
-        finish_msgs.append(str(msg))
-        raise FinishedException
-
-    cfg = SimpleNamespace(
-        runtime_mode="ai_service_runtime",
-        ai_runtime_fallback_to_plugin=False,
-        api_backends=list,
-        merge_reference_urls_into_prompt=False,
-        default_edit_prompt="生成图像",
-        draw_total_timeout=60.0,
-        request_timeout=30.0,
-        max_concurrency=2,
-        ref_download_timeout=30.0,
-        use_edits_for_reference_images=True,
-    )
-
-    monkeypatch.setattr(mod, "image_gen_config", cfg)
-    monkeypatch.setattr(ai_exec, "ai_runtime_circuit_is_open", lambda: True)
-    monkeypatch.setattr(
-        ai_exec,
-        "ai_runtime_circuit_status",
-        lambda: SimpleNamespace(
-            consecutive_failures=3,
-            recent_failure_reason="test",
-        ),
-    )
-    monkeypatch.setattr(
-        plugin_mod, "run_backend_param_attempts", AsyncMock(return_value=True)
-    )
-
-    matcher = SimpleNamespace(finish=fake_finish, send=AsyncMock())
-
-    with pytest.raises(FinishedException):
-        await mod.pallas_draw_execute(
-            matcher,
-            bot_id=1,
-            usage_key=(1, 2),
-            count_usage=False,
-            user_id=2,
-            text="test",
-            ref_urls=[],
-        )
-
-    assert finish_msgs
-    assert plugin_mod.run_backend_param_attempts.await_count == 0
